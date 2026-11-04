@@ -2,11 +2,13 @@ import type { ChannelMeta } from '@/types'
 import type { ChannelAdapter, NewsAdapter, QuoteAdapter } from './types'
 import { isNewsAdapter, isQuoteAdapter } from './types'
 import { eastmoneyQuoteAdapter } from './quote/eastmoney'
+import { tencentQuoteAdapter } from './quote/tencent'
 import { sinaQuoteAdapter } from './quote/sina'
 import { tushareQuoteAdapter } from './quote/tushare'
 import { akshareQuoteAdapter } from './quote/akshare'
 import { clsNewsAdapter } from './news/cls'
 import { newsAggregatorAdapter } from './news/aggregator'
+import { sinaNewsAdapter } from './news/sina'
 
 /**
  * Single registration point for every channel adapter. Add a new provider by
@@ -15,9 +17,11 @@ import { newsAggregatorAdapter } from './news/aggregator'
  */
 const ALL_ADAPTERS: ChannelAdapter[] = [
   eastmoneyQuoteAdapter,
+  tencentQuoteAdapter,
   sinaQuoteAdapter,
   tushareQuoteAdapter,
   akshareQuoteAdapter,
+  sinaNewsAdapter,
   clsNewsAdapter,
   newsAggregatorAdapter,
 ]
@@ -54,5 +58,5 @@ export function getAllNewsAdapters(): NewsAdapter[] {
   return ALL_ADAPTERS.filter(isNewsAdapter)
 }
 
-/** Channels enabled by default for a fresh visit. */
-export const DEFAULT_ENABLED_CHANNELS = ['eastmoney-quote', 'sina-quote', 'cls-news']
+/** Channels enabled by default for a fresh visit: two live quote sources + one live news feed. */
+export const DEFAULT_ENABLED_CHANNELS = ['eastmoney-quote', 'tencent-quote', 'sina-news']

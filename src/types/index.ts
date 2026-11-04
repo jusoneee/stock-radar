@@ -21,6 +21,8 @@ export interface ChannelMeta {
   latencyMs: number
   /** True while the channel returns generated demo data instead of live data. */
   simulated: boolean
+  /** Human readable rate-limit note for live providers (e.g. "≤2 req/s"). */
+  rateLimit?: string
 }
 
 export interface ChannelConfig {
@@ -185,4 +187,8 @@ export interface AdapterSettings {
   /** Runtime keys, injected by the store. Never persisted. */
   keys: Record<string, string>
   timeoutMs: number
+  /** Extra attempts after a network failure. */
+  retryCount: number
+  /** In-memory response cache TTL, in milliseconds. 0 disables caching. */
+  cacheTtlMs: number
 }

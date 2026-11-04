@@ -8,6 +8,10 @@ export interface AdapterContext {
   /** User-provided key, in-memory only. */
   apiKey?: string
   timeoutMs: number
+  /** Extra attempts after a network failure. */
+  retryCount: number
+  /** In-memory response cache TTL, in milliseconds. 0 disables caching. */
+  cacheTtlMs: number
   now: Date
 }
 
