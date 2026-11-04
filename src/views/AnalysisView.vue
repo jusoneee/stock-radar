@@ -44,6 +44,17 @@ function channelName(id: string): string {
   return CHANNEL_CATALOG.find((meta) => meta.id === id)?.name ?? id
 }
 
+/** Channels that failed or still return generated demo data, surfaced as a banner. */
+const degraded = computed(() => {
+  if (!report.value) return null
+  const failed = report.value.channelRuns.filter((run) => !run.ok)
+  const simulated = report.value.channelRuns.filter(
+    (run) => CHANNEL_CATALOG.find((meta) => meta.id === run.channelId)?.simulated,
+  )
+  if (failed.length === 0 && simulated.length === 0) return null
+  return { failed, simulated }
+})
+
 function selectSymbol(symbol: string): void {
   selectedSymbol.value = symbol
 }
@@ -78,6 +89,17 @@ onMounted(async () => {
     </header>
 
     <p v-if="analysis.error" class="banner-error">{{ analysis.error }}</p>
+
+    <div v-if="degraded" class="banner-warn">
+      <p v-if="degraded.failed.length > 0">
+        以下渠道请求失败（本次结果已自动降级为其余可用渠道）：
+        <strong>{{ degraded.failed.map((run) => channelName(run.channelId)).join('、') }}</strong>
+      </p>
+      <p v-if="degraded.simulated.length > 0">
+        以下渠道仍返回<strong>模拟数据</strong>，相关分项不代表真实行情：
+        {{ degraded.simulated.map((run) => channelName(run.channelId)).join('、') }}
+      </p>
+    </div>
 
     <div v-if="analysis.loading && !report" class="card loading-card">
       <p>正在并行拉取渠道数据并计算指标…</p>
