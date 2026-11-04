@@ -35,6 +35,18 @@ const newsCards = computed(() => buildView('news', store.newsSettings))
 
 const quoteEnabled = computed(() => quoteCards.value.filter((item) => item.enabled).length)
 const newsEnabled = computed(() => newsCards.value.filter((item) => item.enabled).length)
+
+function onTimeout(event: Event): void {
+  store.setTimeoutMs(Number((event.target as HTMLInputElement).value))
+}
+
+function onRetry(event: Event): void {
+  store.setRetryCount(Number((event.target as HTMLInputElement).value))
+}
+
+function onCacheTtl(event: Event): void {
+  store.setCacheTtlMs(Number((event.target as HTMLInputElement).value))
+}
 </script>
 
 <template>
@@ -97,6 +109,31 @@ const newsEnabled = computed(() => newsCards.value.filter((item) => item.enabled
         />
       </div>
       <p v-if="newsEnabled === 0" class="inline-warn">未启用新闻源时，事件驱动分项按中性 50 分处理。</p>
+    </div>
+
+    <div class="card">
+      <header class="card-head">
+        <h2>请求策略</h2>
+        <span class="tag">对公开接口的限频保护</span>
+      </header>
+      <div class="policy-grid">
+        <label class="policy-field">
+          <span>请求超时（ms）</span>
+          <input type="number" min="2000" max="60000" step="1000" :value="store.timeoutMs" @change="onTimeout" />
+        </label>
+        <label class="policy-field">
+          <span>失败重试次数</span>
+          <input type="number" min="0" max="5" step="1" :value="store.retryCount" @change="onRetry" />
+        </label>
+        <label class="policy-field">
+          <span>响应缓存 TTL（ms）</span>
+          <input type="number" min="0" max="600000" step="5000" :value="store.cacheTtlMs" @change="onCacheTtl" />
+        </label>
+      </div>
+      <p class="hint-text">
+        缓存命中时不发起网络请求，避免连续点击「重新分析」触发上游限流；设为 0 表示每次实时请求。
+        真实接口为公开但非官方承诺的地址，字段可能调整，请以实际返回为准。
+      </p>
     </div>
 
     <div class="card">

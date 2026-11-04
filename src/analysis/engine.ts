@@ -56,7 +56,13 @@ export class AnalysisEngine {
   }
 
   private context(settings: AdapterSettings, id: string, now: Date): AdapterContext {
-    return { apiKey: settings.keys[id], timeoutMs: settings.timeoutMs, now }
+    return {
+      apiKey: settings.keys[id],
+      timeoutMs: settings.timeoutMs,
+      retryCount: settings.retryCount,
+      cacheTtlMs: settings.cacheTtlMs,
+      now,
+    }
   }
 
   private async fetchQuotes(settings: AdapterSettings, now: Date): Promise<QuoteBatch[]> {
@@ -201,6 +207,15 @@ export class AnalysisEngine {
     ])
 
     const merged = this.mergeQuotes(quoteBatches)
+    if (merged.size === 0) {
+      // Never fall back to fake data silently: surface why every provider failed.
+      const failures = quoteBatches
+        .filter((batch) => !batch.result.ok)
+        .map((batch) => `${batch.channelId}：${batch.result.error ?? '无数据'}`)
+      throw new Error(
+        `所有行情渠道均未取到数据，请检查网络或数据源配置后重试。${failures.length > 0 ? `失败原因：${failures.join('；')}` : ''}`,
+      )
+    }
     const stockRefs = Array.from(merged.values()).map((entry) => ({
       symbol: entry.primary.symbol,
       name: entry.primary.name,

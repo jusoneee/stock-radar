@@ -50,9 +50,10 @@ npm run preview
 2. **设置权重**：拖动滑杆（0.05～1.00）。同类型渠道会归一化，卡片下方显示实际占比。
 3. **填写密钥**：标记「需密钥」的渠道会显示输入框（如 Tushare、财联社）。密钥只保存在当前页面内存，**刷新页面即清除**。
 4. **选择股票池**：点击股票标签切换，至少保留 1 只。
-5. **恢复默认**：一键回到默认启用组合（东方财富 + 新浪 + 财联社）。
+5. **恢复默认**：一键回到默认启用组合（东方财富 + 腾讯证券 + 新浪财经资讯）。
+6. **请求策略**：可调请求超时（2～60s）、失败重试次数（0～5）、响应缓存 TTL（0～600s）。缓存命中时不会重复请求上游，建议保持 30s 默认值。
 
-配置（开关、权重、股票池）会自动写入 localStorage；密钥不会。
+配置（开关、权重、股票池、超时/重试/缓存）会自动写入 localStorage；密钥不会。
 
 ### 3.3 分析结果 `/analysis`
 
@@ -71,15 +72,53 @@ npm run preview
 | 验证降级 | 关闭全部新闻源 → 事件分固定为 50；关闭全部行情源 → 页面给出明确错误提示 |
 | 验证持久化 | 调整配置后刷新页面，开关与权重保持不变，密钥被清空 |
 
-## 4. 目录说明
+## 4. 真实数据源与部署
+
+### 4.1 已接入的接口
+
+| 渠道 | 接口地址 | 返回内容 | CORS |
+| --- | --- | --- | --- |
+| 东方财富行情 | `https://push2.eastmoney.com/api/qt/ulist.np/get` | 批量快照（价格/涨跌/成交量/成交额/今开/最高/最低） | 回显 Origin，可直连 |
+| 东方财富行情 | `https://push2his.eastmoney.com/api/qt/stock/kline/get` | 前复权日 K（默认 120 根） | 同上 |
+| 腾讯证券行情 | `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get` | 前复权日 K | `*` |
+| 腾讯证券行情 | `https://qt.gtimg.cn/q=` | 实时快照（GBK 文本） | `*` |
+| 新浪财经资讯 | `https://feed.mix.sina.com.cn/api/roll/get` | 滚动资讯 30 条（标题/摘要/时间/来源/链接） | **无**，需代理 |
+
+实测（2026-11-04）：10 只标的全部返回日 K、30 条资讯、3/3 渠道成功，单渠道耗时 176～258ms。
+
+### 4.2 开发环境
+
+`npm run dev` 已内置 `/api/sina` → `https://feed.mix.sina.com.cn` 的代理（见 [vite.config.ts](../vite.config.ts)），无需额外配置。东方财富与腾讯接口因返回 CORS 头，浏览器可直连。
+
+### 4.3 静态部署
+
+行情渠道可直接工作；新浪资讯需要同域反向代理，否则该渠道会在「渠道运行状态」中显示失败（不影响行情与评分）。Nginx 示例：
+
+```nginx
+location /api/sina/ {
+    proxy_pass https://feed.mix.sina.com.cn/;
+    proxy_set_header Host feed.mix.sina.com.cn;
+    proxy_set_header Referer https://finance.sina.com.cn/;
+}
+```
+
+### 4.4 限频与稳定性建议
+
+- 东方财富、腾讯：建议 ≤2 请求/秒；日 K 是逐股请求，10 只标的约 10 次请求。
+- 新浪资讯：建议 ≤1 请求/秒。
+- 保持默认 30s 响应缓存，避免连续点击「重新分析」触发限流。
+- 公开接口无官方 SLA，字段可能调整；解析失败会以 `PARSE` 错误出现在渠道状态中，而不是静默返回空数据。
+
+## 5. 目录说明
 
 ```
 src/
 ├── adapters/                 # 数据源层
 │   ├── types.ts              # 适配器契约与错误类型
+│   ├── http.ts               # 统一 HTTP 客户端（超时/重试/缓存/GBK 解码）
 │   ├── registry.ts           # 渠道注册表（新增数据源入口）
-│   ├── quote/                # 行情适配器：eastmoney / sina / tushare / akshare
-│   ├── news/                 # 新闻适配器：cls / aggregator
+│   ├── quote/                # 行情适配器：eastmoney / tencent（真实）、sina / tushare / akshare（模拟兜底）
+│   ├── news/                 # 新闻适配器：sina（真实）、cls / aggregator（模拟兜底）
 │   └── mock/                 # 股票池、K 线生成器、新闻语料
 ├── analysis/                 # 纯逻辑层（不依赖 Vue）
 │   ├── indicators.ts         # 技术指标
@@ -100,7 +139,7 @@ src/
 
 数据流：`views/components → stores → analysis/engine → adapters`。`analysis` 只接收标准化的 `QuoteSnapshot` / `RawNewsItem`，因此可以整体迁移到服务端运行。
 
-## 5. 如何新增一个数据源适配器
+## 6. 如何新增一个数据源适配器
 
 以新增「同花顺行情」为例，共 3 步。
 
@@ -145,7 +184,8 @@ export const thsQuoteAdapter: QuoteAdapter = {
 - **只返回标准结构**：`QuoteSnapshot` 内含 `bars`（日期升序，至少 20 根），不要把厂商字段泄漏到分析层。
 - **错误统一抛出** `AdapterError`（`NETWORK` / `TIMEOUT` / `PARSE` / `MISSING_KEY`），编排层会捕获并把失败显示在「渠道运行状态」。
 - **密钥从 `ctx.apiKey` 读取**，不要写死在文件里，也不要提交到仓库。
-- 真实请求需处理超时（`ctx.timeoutMs`）、限频与重试；必要时走后端代理解决跨域。
+- 真实请求统一使用 `src/adapters/http.ts` 的 `fetchJson` / `fetchText`：自动应用 `ctx.timeoutMs`、`ctx.retryCount`、`ctx.cacheTtlMs`，并把失败归一化为 `AdapterError`。
+- 跨域受限的接口在 `vite.config.ts` 增加 `server.proxy` 规则；纯静态部署需自行提供同路径反向代理。
 
 ### 第 2 步：注册渠道
 
@@ -179,10 +219,13 @@ const ALL_ADAPTERS: ChannelAdapter[] = [
 
 以上改动不需要触碰页面组件；如新增枚举值，需同步 `src/types/index.ts` 与 `src/lib/labels.ts` 的中文标签。
 
-## 6. 常见问题
+## 7. 常见问题
 
 | 现象 | 原因 | 解决 |
 | --- | --- | --- |
+| 提示「所有行情渠道均未取到数据」 | 网络不通、被限流或接口结构变化 | 查看「渠道运行状态」里的失败原因；降低刷新频率，等待缓存 TTL 结束再试 |
+| 新浪资讯渠道失败，行情正常 | 接口无 CORS 头且未配置代理 | 开发环境用 `npm run dev`；静态部署按 4.3 配置 `/api/sina` 反向代理 |
+| 渠道卡片显示「模拟数据」 | 该渠道为离线兜底实现 | 在 `/channels` 关闭模拟渠道，只保留「真实数据」渠道 |
 | 运行分析提示「未启用任何行情渠道」 | 所有行情源被关闭 | 到 `/channels` 打开至少一个行情源 |
 | 新闻事件为空 | 所有新闻源关闭，或新闻未匹配到股票池 | 开启新闻源；或确认新闻正文包含股票名称/代码 |
 | 评分与昨天的不完全一致 | 新闻发布时间相对当前时间变化导致阶段判定变化 | 属预期；阶段判定依赖发布时间 |
@@ -190,7 +233,7 @@ const ALL_ADAPTERS: ChannelAdapter[] = [
 | `npm install` 卡住 | 网络或 npm 源问题 | 切换镜像后重试 |
 | 构建报类型错误 | 修改了类型或未同步标签 | 运行 `npm run typecheck` 定位具体文件 |
 
-## 7. 安全与合规提示
+## 8. 安全与合规提示
 
 - 仓库内不得出现任何真实 API Key、Cookie、账号密码；`.gitignore` 已排除 `.env` 与常见密钥文件。
 - 上线前请补齐后端代理、鉴权与访问审计；前端直连第三方接口存在密钥泄露风险。

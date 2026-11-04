@@ -14,6 +14,9 @@ interface ChannelState {
 interface PersistedConfig {
   channels: ChannelState[]
   symbols: string[]
+  timeoutMs?: number
+  retryCount?: number
+  cacheTtlMs?: number
 }
 
 function defaultChannels(): ChannelState[] {
@@ -44,6 +47,10 @@ export const useChannelsStore = defineStore('channels', {
     keys: {} as Record<string, string>,
     symbols: [...DEFAULT_SYMBOLS] as string[],
     timeoutMs: 8_000,
+    /** Extra attempts after a network failure. */
+    retryCount: 1,
+    /** Response cache TTL so repeated runs do not spam public APIs. */
+    cacheTtlMs: 30_000,
     loaded: false,
   }),
   getters: {
@@ -75,6 +82,8 @@ export const useChannelsStore = defineStore('channels', {
         symbols: [...this.symbols],
         keys: { ...this.keys },
         timeoutMs: this.timeoutMs,
+        retryCount: this.retryCount,
+        cacheTtlMs: this.cacheTtlMs,
       }
     },
     init(): void {
@@ -104,6 +113,15 @@ export const useChannelsStore = defineStore('channels', {
           const filtered = parsed.symbols.filter((symbol) => known.has(symbol))
           if (filtered.length > 0) this.symbols = filtered
         }
+        if (Number.isFinite(parsed.timeoutMs)) {
+          this.timeoutMs = Math.min(60_000, Math.max(2_000, Number(parsed.timeoutMs)))
+        }
+        if (Number.isFinite(parsed.retryCount)) {
+          this.retryCount = Math.min(5, Math.max(0, Math.round(Number(parsed.retryCount))))
+        }
+        if (Number.isFinite(parsed.cacheTtlMs)) {
+          this.cacheTtlMs = Math.min(600_000, Math.max(0, Number(parsed.cacheTtlMs)))
+        }
       } catch {
         // Corrupted local storage should never block the app; fall back to defaults.
         localStorage.removeItem(STORAGE_KEY)
@@ -113,8 +131,23 @@ export const useChannelsStore = defineStore('channels', {
       const payload: PersistedConfig = {
         channels: this.channels.map(({ id, enabled, weight }) => ({ id, enabled, weight })),
         symbols: this.symbols,
+        timeoutMs: this.timeoutMs,
+        retryCount: this.retryCount,
+        cacheTtlMs: this.cacheTtlMs,
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+    },
+    setTimeoutMs(value: number): void {
+      this.timeoutMs = Math.min(60_000, Math.max(2_000, Math.round(value)))
+      this.persist()
+    },
+    setRetryCount(value: number): void {
+      this.retryCount = Math.min(5, Math.max(0, Math.round(value)))
+      this.persist()
+    },
+    setCacheTtlMs(value: number): void {
+      this.cacheTtlMs = Math.min(600_000, Math.max(0, Math.round(value)))
+      this.persist()
     },
     toggle(id: string): void {
       const channel = this.channels.find((item) => item.id === id)
@@ -152,6 +185,9 @@ export const useChannelsStore = defineStore('channels', {
       this.channels = defaultChannels()
       this.symbols = [...DEFAULT_SYMBOLS]
       this.keys = {}
+      this.timeoutMs = 8_000
+      this.retryCount = 1
+      this.cacheTtlMs = 30_000
       this.persist()
     },
   },

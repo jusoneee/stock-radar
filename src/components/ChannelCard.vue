@@ -53,8 +53,10 @@ function onKey(event: Event): void {
       <span class="tag">可靠度 {{ (meta.reliability * 100).toFixed(0) }}%</span>
       <span class="tag">延时 {{ meta.latencyMs }}ms</span>
       <span v-if="meta.simulated" class="tag tag-mock">模拟数据</span>
+      <span v-else class="tag tag-live">真实数据</span>
       <span v-if="meta.requiresKey" class="tag tag-key">需密钥</span>
     </div>
+    <p v-if="meta.rateLimit" class="channel-rate">{{ meta.rateLimit }}</p>
 
     <div class="weight-row">
       <label :for="`weight-${meta.id}`">权重</label>
