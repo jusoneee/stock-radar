@@ -38,3 +38,7 @@ Thumbs.db
 .cache/
 .temp/
 coverage/
+
+# Local tool artifacts (screenshots, html share packages)
+.screenshots/
+.trae-html-share-packages/
