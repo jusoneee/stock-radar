@@ -1,0 +1,188 @@
+/**
+ * Domain model shared by adapters, analysis modules and UI.
+ * Keep this file free of framework imports so analysis logic stays UI-agnostic.
+ */
+
+export type ChannelKind = 'quote' | 'news'
+
+export interface ChannelMeta {
+  id: string
+  name: string
+  kind: ChannelKind
+  provider: string
+  description: string
+  /** Real integration requires a user-provided key. Keys are never persisted or committed. */
+  requiresKey: boolean
+  keyHint?: string
+  docsUrl?: string
+  /** 0 - 1, used as the default weight suggestion. */
+  reliability: number
+  /** Simulated latency of the mock channel, in milliseconds. */
+  latencyMs: number
+  /** True while the channel returns generated demo data instead of live data. */
+  simulated: boolean
+}
+
+export interface ChannelConfig {
+  id: string
+  enabled: boolean
+  /** Normalized weight, 0 - 1. */
+  weight: number
+}
+
+export interface QuoteBar {
+  /** Trading date in YYYY-MM-DD. */
+  date: string
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
+export interface QuoteSnapshot {
+  symbol: string
+  name: string
+  sector: string
+  bars: QuoteBar[]
+  sourceId: string
+  /** Timestamp of the mock data generation. */
+  asOf: string
+}
+
+export interface RawNewsItem {
+  id: string
+  sourceId: string
+  title: string
+  content: string
+  /** ISO timestamp. */
+  publishedAt: string
+  /** Symbols declared by the source, may be empty. */
+  symbols?: string[]
+  url?: string
+}
+
+export type TrendLabel = 'strong-up' | 'up' | 'range' | 'pullback' | 'down'
+
+export interface Indicators {
+  lastClose: number
+  ma5: number
+  ma10: number
+  ma20: number
+  ma60: number
+  pctChange1d: number
+  pctChange5d: number
+  volumeRatio: number
+  /** Close relative to the 20-day high/low box, 0 - 1. */
+  rangePosition: number
+  breakout20: boolean
+  volatility20: number
+  avgAmount: number
+}
+
+export interface TrendResult {
+  label: TrendLabel
+  /** 0 - 100 trend strength. */
+  score: number
+  reasons: string[]
+}
+
+export interface ScoreBreakdownItem {
+  key: string
+  label: string
+  score: number
+  weight: number
+  detail: string
+}
+
+export type EventType =
+  | 'policy'
+  | 'earnings'
+  | 'contract'
+  | 'mna'
+  | 'product'
+  | 'supply-chain'
+  | 'risk'
+  | 'other'
+
+export type Sentiment = 'positive' | 'neutral' | 'negative'
+
+/** 发酵 -> 确认 -> 衰退 */
+export type EventStage = 'fermenting' | 'confirmed' | 'fading'
+
+export type ActionAdvice = 'buy-on-dip' | 'watch-breakout' | 'hold' | 'reduce' | 'avoid'
+
+export interface NewsAnalysis {
+  newsId: string
+  title: string
+  content: string
+  publishedAt: string
+  sourceId: string
+  symbols: string[]
+  eventType: EventType
+  sentiment: Sentiment
+  confidence: number
+  keywords: string[]
+  stage: EventStage
+  stageReason: string
+  advice: ActionAdvice
+  adviceReason: string
+  /** Suggested observation window in trading days. */
+  impactWindow: number
+}
+
+export interface Recommendation {
+  symbol: string
+  name: string
+  sector: string
+  totalScore: number
+  trend: TrendResult
+  indicators: Indicators
+  breakdown: ScoreBreakdownItem[]
+  entryAdvice: string
+  riskFlags: string[]
+  bars: QuoteBar[]
+  /** Channels that returned data for this symbol. */
+  sourceIds: string[]
+  news: NewsAnalysis[]
+}
+
+export interface MarketSummary {
+  total: number
+  advances: number
+  declines: number
+  avgPctChange: number
+  strongCount: number
+  /** Positive news events among all analyzed news. */
+  positiveNews: number
+  negativeNews: number
+}
+
+export interface ChannelRunResult {
+  channelId: string
+  ok: boolean
+  count: number
+  elapsedMs: number
+  error?: string
+}
+
+export interface AnalysisReport {
+  generatedAt: string
+  recommendations: Recommendation[]
+  news: NewsAnalysis[]
+  market: MarketSummary
+  channelRuns: ChannelRunResult[]
+  /** Symbols whose data could not be loaded. */
+  missingSymbols: string[]
+}
+
+export interface AdapterSettings {
+  /** Enabled quote channels with normalized weights. */
+  quoteChannels: Array<{ id: string; weight: number }>
+  /** Enabled news channels with normalized weights. */
+  newsChannels: Array<{ id: string; weight: number }>
+  symbols: string[]
+  /** Runtime keys, injected by the store. Never persisted. */
+  keys: Record<string, string>
+  timeoutMs: number
+}

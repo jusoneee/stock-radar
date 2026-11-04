@@ -1,0 +1,158 @@
+import { defineStore } from 'pinia'
+import { CHANNEL_CATALOG, DEFAULT_ENABLED_CHANNELS } from '@/adapters/registry'
+import { DEFAULT_SYMBOLS } from '@/adapters/mock/universe'
+import type { AdapterSettings, ChannelMeta } from '@/types'
+
+const STORAGE_KEY = 'stock-radar:channel-config:v1'
+
+interface ChannelState {
+  id: string
+  enabled: boolean
+  weight: number
+}
+
+interface PersistedConfig {
+  channels: ChannelState[]
+  symbols: string[]
+}
+
+function defaultChannels(): ChannelState[] {
+  return CHANNEL_CATALOG.map((meta) => ({
+    id: meta.id,
+    enabled: DEFAULT_ENABLED_CHANNELS.includes(meta.id),
+    weight: meta.reliability,
+  }))
+}
+
+/**
+ * Normalize weights inside a channel kind so the merged contribution always
+ * sums to 1, regardless of how many channels the user enables.
+ */
+function normalize(items: Array<{ id: string; weight: number }>): Array<{ id: string; weight: number }> {
+  const total = items.reduce((sum, item) => sum + item.weight, 0)
+  if (items.length === 0) return []
+  if (total <= 0) {
+    return items.map((item) => ({ id: item.id, weight: 1 / items.length }))
+  }
+  return items.map((item) => ({ id: item.id, weight: item.weight / total }))
+}
+
+export const useChannelsStore = defineStore('channels', {
+  state: () => ({
+    channels: [] as ChannelState[],
+    /** Keys live in memory only: never persisted, never committed. */
+    keys: {} as Record<string, string>,
+    symbols: [...DEFAULT_SYMBOLS] as string[],
+    timeoutMs: 8_000,
+    loaded: false,
+  }),
+  getters: {
+    quoteCatalog: (): ChannelMeta[] => CHANNEL_CATALOG.filter((meta) => meta.kind === 'quote'),
+    newsCatalog: (): ChannelMeta[] => CHANNEL_CATALOG.filter((meta) => meta.kind === 'news'),
+    enabledCount(state): number {
+      return state.channels.filter((channel) => channel.enabled).length
+    },
+    quoteSettings(state): Array<{ id: string; weight: number }> {
+      const enabled = state.channels.filter((channel) => {
+        const meta = CHANNEL_CATALOG.find((item) => item.id === channel.id)
+        return channel.enabled && meta?.kind === 'quote'
+      })
+      return normalize(enabled.map((channel) => ({ id: channel.id, weight: channel.weight })))
+    },
+    newsSettings(state): Array<{ id: string; weight: number }> {
+      const enabled = state.channels.filter((channel) => {
+        const meta = CHANNEL_CATALOG.find((item) => item.id === channel.id)
+        return channel.enabled && meta?.kind === 'news'
+      })
+      return normalize(enabled.map((channel) => ({ id: channel.id, weight: channel.weight })))
+    },
+  },
+  actions: {
+    buildSettings(): AdapterSettings {
+      return {
+        quoteChannels: this.quoteSettings,
+        newsChannels: this.newsSettings,
+        symbols: [...this.symbols],
+        keys: { ...this.keys },
+        timeoutMs: this.timeoutMs,
+      }
+    },
+    init(): void {
+      this.channels = defaultChannels()
+      this.symbols = [...DEFAULT_SYMBOLS]
+      this.loadPersisted()
+      this.loaded = true
+    },
+    loadPersisted(): void {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY)
+        if (!raw) return
+        const parsed = JSON.parse(raw) as PersistedConfig
+        if (Array.isArray(parsed.channels)) {
+          this.channels = this.channels.map((channel) => {
+            const saved = parsed.channels.find((item) => item.id === channel.id)
+            if (!saved) return channel
+            return {
+              id: channel.id,
+              enabled: Boolean(saved.enabled),
+              weight: Number.isFinite(saved.weight) ? Math.min(1, Math.max(0.05, saved.weight)) : channel.weight,
+            }
+          })
+        }
+        if (Array.isArray(parsed.symbols)) {
+          const known = new Set(DEFAULT_SYMBOLS)
+          const filtered = parsed.symbols.filter((symbol) => known.has(symbol))
+          if (filtered.length > 0) this.symbols = filtered
+        }
+      } catch {
+        // Corrupted local storage should never block the app; fall back to defaults.
+        localStorage.removeItem(STORAGE_KEY)
+      }
+    },
+    persist(): void {
+      const payload: PersistedConfig = {
+        channels: this.channels.map(({ id, enabled, weight }) => ({ id, enabled, weight })),
+        symbols: this.symbols,
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+    },
+    toggle(id: string): void {
+      const channel = this.channels.find((item) => item.id === id)
+      if (!channel) return
+      channel.enabled = !channel.enabled
+      this.persist()
+    },
+    setWeight(id: string, weight: number): void {
+      const channel = this.channels.find((item) => item.id === id)
+      if (!channel) return
+      channel.weight = Math.min(1, Math.max(0.05, weight))
+      this.persist()
+    },
+    setKey(id: string, value: string): void {
+      this.keys[id] = value.trim()
+    },
+    toggleSymbol(symbol: string): void {
+      const index = this.symbols.indexOf(symbol)
+      if (index >= 0) {
+        if (this.symbols.length <= 1) return
+        this.symbols.splice(index, 1)
+      } else {
+        this.symbols.push(symbol)
+      }
+      this.persist()
+    },
+    enableAll(kind: 'quote' | 'news', enabled: boolean): void {
+      for (const channel of this.channels) {
+        const meta = CHANNEL_CATALOG.find((item) => item.id === channel.id)
+        if (meta?.kind === kind) channel.enabled = enabled
+      }
+      this.persist()
+    },
+    reset(): void {
+      this.channels = defaultChannels()
+      this.symbols = [...DEFAULT_SYMBOLS]
+      this.keys = {}
+      this.persist()
+    },
+  },
+})
