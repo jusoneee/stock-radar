@@ -6,12 +6,14 @@ import type {
   QuoteSnapshot,
   RawNewsItem,
   Recommendation,
+  ScoreWeights,
 } from '@/types'
 import type { AdapterContext, NewsAdapter, QuoteAdapter } from '@/adapters/types'
 import { computeIndicators } from './indicators'
 import { classifyTrend } from './trend'
 import { analyzeNews } from './news/pipeline'
 import { scoreNews, scoreStock } from './scoring'
+import { latestTradingDay } from '@/lib/trading-calendar'
 
 interface QuoteBatch {
   channelId: string
@@ -41,6 +43,18 @@ export interface EngineDeps {
   quoteAdapters: QuoteAdapter[]
   newsAdapters: NewsAdapter[]
   now?: () => Date
+}
+
+export interface EngineRunOptions {
+  /** User-configurable factor weights; defaults live in `scoring.ts`. */
+  scoreWeights?: ScoreWeights
+}
+
+function daysBetweenKeys(from: string, to: string): number {
+  const start = Date.parse(`${from}T00:00:00Z`)
+  const end = Date.parse(`${to}T00:00:00Z`)
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 0
+  return Math.round((end - start) / 86_400_000)
 }
 
 /**
@@ -192,7 +206,7 @@ export class AnalysisEngine {
     return merged
   }
 
-  async run(settings: AdapterSettings): Promise<AnalysisReport> {
+  async run(settings: AdapterSettings, options: EngineRunOptions = {}): Promise<AnalysisReport> {
     const now = this.deps.now ? this.deps.now() : new Date()
     if (settings.quoteChannels.length === 0) {
       throw new Error('未启用任何行情渠道，请先在「数据源配置」中开启至少一个行情源。')
@@ -216,9 +230,10 @@ export class AnalysisEngine {
         `所有行情渠道均未取到数据，请检查网络或数据源配置后重试。${failures.length > 0 ? `失败原因：${failures.join('；')}` : ''}`,
       )
     }
+    const profiles = settings.profiles ?? {}
     const stockRefs = Array.from(merged.values()).map((entry) => ({
       symbol: entry.primary.symbol,
-      name: entry.primary.name,
+      name: profiles[entry.primary.symbol]?.name ?? entry.primary.name,
     }))
 
     const channelWeights: Record<string, number> = {}
@@ -227,24 +242,43 @@ export class AnalysisEngine {
     const news = analyzeNews(rawNews, stockRefs, channelWeights, now)
 
     const recommendations: Recommendation[] = []
+    const latestTrading = latestTradingDay(now)
     for (const [symbol, entry] of merged) {
       const indicators = computeIndicators(entry.primary.bars)
       const trend = classifyTrend(indicators)
       const relatedNews = news.filter((item) => item.symbols.includes(symbol))
       const newsScore = scoreNews(relatedNews)
-      const scored = scoreStock(trend, indicators, newsScore, relatedNews, entry.sourceIds.length)
+      const profile = profiles[symbol]
+      const scored = scoreStock(
+        trend,
+        indicators,
+        newsScore,
+        relatedNews,
+        entry.sourceIds.length,
+        options.scoreWeights,
+      )
 
       const consensusClose = entry.totalWeight > 0 ? entry.weightedClose / entry.totalWeight : indicators.lastClose
       const deviation = Math.abs(consensusClose - indicators.lastClose) / Math.max(indicators.lastClose, 0.01)
       const riskFlags = [...scored.riskFlags]
+      if (profile?.st) {
+        riskFlags.push('ST / *ST 标的，退市与流动性风险显著高于普通股票')
+      }
+      if (profile?.suspended) {
+        riskFlags.push('行情列表显示该股当前无报价，可能处于停牌状态')
+      }
+      const lastBarDate = entry.primary.bars[entry.primary.bars.length - 1]?.date ?? ''
+      if (lastBarDate && daysBetweenKeys(lastBarDate, latestTrading) > 7) {
+        riskFlags.push(`最新日 K 停留在 ${lastBarDate}，可能停牌或数据源延迟`)
+      }
       if (entry.sourceIds.length > 1 && deviation > 0.005) {
         riskFlags.push(`多源收盘价偏差 ${(deviation * 100).toFixed(2)}%，建议核对数据`)
       }
 
       recommendations.push({
         symbol,
-        name: entry.primary.name,
-        sector: entry.primary.sector,
+        name: profile?.name ?? entry.primary.name,
+        sector: profile?.sector ?? entry.primary.sector,
         totalScore: scored.totalScore,
         trend,
         indicators,
