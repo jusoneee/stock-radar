@@ -16,6 +16,7 @@ const watchlist = useWatchlistStore()
 const navItems = [
   { to: '/', label: '仪表盘' },
   { to: '/watchlist', label: '自选池' },
+  { to: '/compare', label: '多股对比' },
   { to: '/channels', label: '数据源配置' },
   { to: '/analysis', label: '分析结果' },
   { to: '/legal/sources', label: '合规与数据来源' },
