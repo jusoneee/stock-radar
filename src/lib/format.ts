@@ -6,7 +6,7 @@ export function formatPercent(value: number, digits = 2): string {
 }
 
 export function formatPrice(value: number): string {
-  return value >= 1000 ? value.toFixed(2) : value.toFixed(value >= 10 ? 2 : 3)
+  return value.toFixed(2)
 }
 
 export function formatAmount(value: number): string {

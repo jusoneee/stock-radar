@@ -191,6 +191,7 @@ a {
 .page-head-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -1683,6 +1684,35 @@ a {
   .stat-grid,
   .pipeline {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Touch-friendly targets for phones and tablets (<=1024px). */
+@media (max-width: 1024px) {
+  .btn,
+  .btn-mini,
+  .nav-link,
+  .nav-toggle,
+  .pool-move,
+  .pool-remove,
+  .pool-star,
+  .pool-compare,
+  .search-input,
+  .select-input,
+  .group-input,
+  .pick-chip {
+    min-height: 44px;
+  }
+
+  .pool-star,
+  .pool-remove,
+  .pool-move {
+    min-width: 44px;
+  }
+
+  .footer-links a {
+    display: inline-block;
+    padding: 12px 4px;
   }
 }
 

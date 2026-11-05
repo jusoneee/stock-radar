@@ -206,7 +206,7 @@ async function loadUniverse(): Promise<void> {
 
       <div v-else-if="!hasUniverse" class="empty-state compact">
         <h3>未加载全市场列表</h3>
-        <p>全市场列表需要一次分页抓取（约 56 页），失败时会明确提示，不会退回假数据。</p>
+        <p>全市场列表需要一次分页抓取（约 60 页），失败时会明确提示，不会退回假数据。</p>
         <button class="btn btn-primary" :disabled="universe.isLoading" @click="loadUniverse">加载全市场列表</button>
       </div>
 

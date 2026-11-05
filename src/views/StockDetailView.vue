@@ -11,6 +11,7 @@ import { useCompareStore, MAX_COMPARE } from '@/stores/compare'
 import KlineChart from '@/components/KlineChart.vue'
 import ForecastPanel from '@/components/ForecastPanel.vue'
 import StockNewsPanel from '@/components/StockNewsPanel.vue'
+import { formatAmount, formatPercent, formatPrice } from '@/lib/format'
 
 const route = useRoute()
 const watchlist = useWatchlistStore()
@@ -124,12 +125,6 @@ function toggleWatch(): void {
   })
 }
 
-function formatVolume(value: number): string {
-  if (value >= 100_000_000) return `${(value / 100_000_000).toFixed(2)} 亿`
-  if (value >= 10_000) return `${(value / 10_000).toFixed(1)} 万`
-  return value.toFixed(0)
-}
-
 onMounted(load)
 watch(symbol, load)
 </script>
@@ -166,32 +161,35 @@ watch(symbol, load)
       </div>
     </header>
 
-    <p v-if="error" class="inline-warn">{{ error }}</p>
+    <div v-if="error" class="inline-warn">
+      <span>{{ error }}</span>
+      <button class="btn btn-mini" @click="load">重试</button>
+    </div>
     <p v-else-if="loading" class="hint-text">正在加载行情与资料…</p>
 
     <template v-if="snapshot && metrics">
       <div class="stat-grid">
         <div class="stat">
           <span class="stat-label">最新收盘</span>
-          <strong>{{ metrics.close.toFixed(2) }}</strong>
+          <strong>{{ formatPrice(metrics.close) }}</strong>
           <em :class="metrics.changePct >= 0 ? 'up' : 'down'">
-            {{ metrics.changePct >= 0 ? '+' : '' }}{{ metrics.changePct.toFixed(2) }}%
+            {{ formatPercent(metrics.changePct) }}
           </em>
         </div>
         <div class="stat">
           <span class="stat-label">{{ metrics.count }} 日区间涨跌（{{ metrics.startDate }} → {{ metrics.endDate }}）</span>
           <strong :class="metrics.rangeChangePct >= 0 ? 'up' : 'down'">
-            {{ metrics.rangeChangePct >= 0 ? '+' : '' }}{{ metrics.rangeChangePct.toFixed(2) }}%
+            {{ formatPercent(metrics.rangeChangePct) }}
           </strong>
         </div>
         <div class="stat">
           <span class="stat-label">区间最高 / 最低</span>
-          <strong>{{ metrics.high.toFixed(2) }} / {{ metrics.low.toFixed(2) }}</strong>
+          <strong>{{ formatPrice(metrics.high) }} / {{ formatPrice(metrics.low) }}</strong>
         </div>
         <div class="stat">
           <span class="stat-label">成交量（最近 / 5 日均 / 20 日均）</span>
-          <strong>{{ formatVolume(metrics.lastVolume) }}</strong>
-          <em class="muted">{{ formatVolume(metrics.avg5) }} / {{ formatVolume(metrics.avg20) }}</em>
+          <strong>{{ formatAmount(metrics.lastVolume) }}</strong>
+          <em class="muted">{{ formatAmount(metrics.avg5) }} / {{ formatAmount(metrics.avg20) }}</em>
         </div>
       </div>
 
@@ -332,6 +330,12 @@ watch(symbol, load)
   gap: 16px;
 }
 
+/* Grid items default to min-width:auto, which lets wide inner tables push the
+   whole page sideways on narrow screens. */
+.detail-grid > * {
+  min-width: 0;
+}
+
 .chart-card {
   min-width: 0;
 }
@@ -387,7 +391,7 @@ watch(symbol, load)
 
 @media (max-width: 900px) {
   .detail-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -397,8 +401,10 @@ watch(symbol, load)
   }
 
   .page-head-actions .btn {
-    flex: 1;
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
     justify-content: center;
+    white-space: normal;
   }
 
   .profile-list {

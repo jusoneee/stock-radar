@@ -8,6 +8,7 @@ import { useCompareStore, MAX_COMPARE, MIN_COMPARE } from '@/stores/compare'
 import { useWatchlistStore } from '@/stores/watchlist'
 import LineChart from '@/components/LineChart.vue'
 import type { LineSeries } from '@/components/line-chart.types'
+import { formatAmount, formatPercent, formatPrice } from '@/lib/format'
 
 const compare = useCompareStore()
 const watchlist = useWatchlistStore()
@@ -33,6 +34,7 @@ interface CompareRow {
   avgVolume: number | null
   forecastUp: number | null
   coverage: number
+  missingDays: number
   missing: boolean
   sourceName: string
 }
@@ -92,12 +94,13 @@ const rows = computed<CompareRow[]>(() => {
       return {
         symbol: item.symbol,
         name: nameOf(item.symbol),
-        error: item.error || '无可用日 K 数据',
+        error: item.bars.length === 0 ? item.error || '无可用日 K 数据' : '所选区间内无共同交易日',
         latest: null,
         changePct: null,
         avgVolume: null,
         forecastUp: null,
         coverage: 0,
+        missingDays: dates.length,
         missing: true,
         sourceName: item.sourceName,
       }
@@ -107,6 +110,7 @@ const rows = computed<CompareRow[]>(() => {
     const last = byDate.get(lastDate)
     const covered = item.bars.filter((bar) => dates.includes(bar.date))
     const coverage = dates.length > 0 ? Math.round((covered.length / dates.length) * 100) : 0
+    const missingDays = dates.length - covered.length
     const forecast = forecastBars(item.bars)
     return {
       symbol: item.symbol,
@@ -118,11 +122,23 @@ const rows = computed<CompareRow[]>(() => {
         covered.length > 0 ? covered.reduce((sum, bar) => sum + bar.volume, 0) / covered.length : null,
       forecastUp: forecast.status === 'ok' ? (forecast.horizons.find((item) => item.days === 5)?.upProbability ?? null) : null,
       coverage,
-      missing: covered.length < dates.length || first === undefined || last === undefined,
+      missingDays,
+      missing: missingDays > 0 || first === undefined || last === undefined,
       sourceName: item.sourceName,
     }
   })
 })
+
+/** Stocks that failed to load entirely (missing only some dates is not an error). */
+const failedRows = computed(() => rows.value.filter((row) => row.error !== ''))
+
+/** Plain-text summary so the chart is readable without seeing the graphic. */
+const chartSummary = computed(() =>
+  rows.value
+    .filter((row) => row.changePct !== null)
+    .map((row) => `${row.name} ${row.changePct! >= 0 ? '+' : ''}${row.changePct!.toFixed(2)}%`)
+    .join('；'),
+)
 
 async function load(): Promise<void> {
   if (symbols.value.length === 0) {
@@ -175,13 +191,6 @@ function addManual(): void {
   manual.value = ''
 }
 
-function formatVolume(value: number | null): string {
-  if (value === null) return '—'
-  if (value >= 100_000_000) return `${(value / 100_000_000).toFixed(2)} 亿`
-  if (value >= 10_000) return `${(value / 10_000).toFixed(1)} 万`
-  return value.toFixed(0)
-}
-
 onMounted(load)
 watch(symbols, load, { deep: true })
 </script>
@@ -232,6 +241,10 @@ watch(symbols, load, { deep: true })
     </div>
 
     <p v-if="loading" class="hint-text">正在加载 {{ compare.count }} 只股票的行情…</p>
+    <p v-if="failedRows.length" class="hint-text">
+      部分标的加载失败（见下表）：{{ failedRows.map((row) => row.name || row.symbol).join('、') }}
+      <button class="btn btn-mini" :disabled="loading" @click="load">重试</button>
+    </p>
 
     <template v-if="compare.count >= MIN_COMPARE && !loading">
       <div class="card">
@@ -246,6 +259,7 @@ watch(symbols, load, { deep: true })
           aria-label="多股归一化走势对比图"
           value-suffix=""
         />
+        <p v-if="chartSummary" class="hint-text">文字摘要（首日归一化区间涨跌）：{{ chartSummary }}</p>
         <p class="hint-text">
           <template v-if="commonDates.length >= 2">
             对齐区间 {{ commonDates[0] }} → {{ commonDates.at(-1) }}；缺失交易日的股票在表格中标注为数据缺失。
@@ -279,16 +293,18 @@ watch(symbols, load, { deep: true })
                   <RouterLink :to="`/stock/${row.symbol}`">{{ row.name }}</RouterLink>
                   <span class="muted code">{{ row.symbol }}</span>
                 </td>
-                <td>{{ row.latest !== null ? row.latest.toFixed(2) : '—' }}</td>
+                <td>{{ row.latest !== null ? formatPrice(row.latest) : '—' }}</td>
                 <td v-if="row.changePct !== null" :class="row.changePct >= 0 ? 'up' : 'down'">
-                  {{ row.changePct >= 0 ? '+' : '' }}{{ row.changePct.toFixed(2) }}%
+                  {{ formatPercent(row.changePct) }}
                 </td>
                 <td v-else class="missing">数据缺失</td>
                 <td>{{ row.forecastUp !== null ? `${(row.forecastUp * 100).toFixed(1)}%` : '样本不足' }}</td>
-                <td>{{ formatVolume(row.avgVolume) }}</td>
+                <td>{{ row.avgVolume !== null ? formatAmount(row.avgVolume) : '—' }}</td>
                 <td>
                   <span v-if="row.error" class="missing">{{ row.error }}</span>
-                  <span v-else>{{ row.coverage }}%</span>
+                  <span v-else :class="{ missing: row.missingDays > 0 }">
+                    {{ row.coverage }}%<template v-if="row.missingDays > 0">（缺 {{ row.missingDays }} 日）</template>
+                  </span>
                 </td>
                 <td>{{ row.sourceName || '—' }}</td>
               </tr>
@@ -296,8 +312,13 @@ watch(symbols, load, { deep: true })
           </table>
         </div>
         <p class="hint-text">
-          区间涨跌基于共同交易日的首尾收盘价；5 日方向概率来自独立统计模块（walk-forward 误差见个股详情页）。
-          预测不构成投资建议。
+          对齐口径：取所有已加载股票的共同交易日（最近 120 个），首日收盘价归一化为 100；区间涨跌与日均量能都基于同一组共同交易日，
+          方向概率则基于该股自身完整日 K（样本不足时显示「样本不足」）。
+          缺失交易日不做插值，按「数据覆盖」栏标注缺失天数；停牌、上市时间不足或数据源缺日都会表现为缺失交易日，
+          具体原因需结合交易所公告判断。
+        </p>
+        <p class="hint-text">
+          5 日方向概率来自独立统计模块（walk-forward 误差见个股详情页）。预测不构成投资建议。
         </p>
       </div>
     </template>

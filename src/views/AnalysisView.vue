@@ -6,6 +6,7 @@ import { useWatchlistStore } from '@/stores/watchlist'
 import { useUniverseStore } from '@/stores/universe'
 import { useAnalysisSettingsStore } from '@/stores/analysis-settings'
 import { useSnapshotsStore } from '@/stores/snapshots'
+import { useCustomSourcesStore } from '@/stores/custom-sources'
 import { CHANNEL_CATALOG } from '@/adapters/registry'
 import { getTradingStatus } from '@/lib/trading-calendar'
 import type { AnalysisSnapshot, EventStage, NewsAnalysis, Recommendation, TrendLabel } from '@/types'
@@ -28,6 +29,8 @@ const watchlist = useWatchlistStore()
 const universe = useUniverseStore()
 const settings = useAnalysisSettingsStore()
 const snapshots = useSnapshotsStore()
+const customSources = useCustomSourcesStore()
+customSources.init()
 const keyword = ref('')
 const selectedSymbol = ref('')
 const newsFilter = ref<'all' | 'positive' | 'negative'>('all')
@@ -117,7 +120,8 @@ const weightsText = computed(() => {
 })
 
 function channelName(id: string): string {
-  return CHANNEL_CATALOG.find((meta) => meta.id === id)?.name ?? id
+  const custom = customSources.sources.find((item) => item.id === id)
+  return CHANNEL_CATALOG.find((meta) => meta.id === id)?.name ?? custom?.name ?? id
 }
 
 /** Channels that failed or still return generated demo data, surfaced as a banner. */

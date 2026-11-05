@@ -4,7 +4,7 @@ import { RouterLink } from 'vue-router'
 import type { NewsAnalysis, QuoteBar } from '@/types'
 import { loadQuoteSeries, loadStockNews } from '@/services/stock-data'
 import { forecastBars } from '@/analysis/forecast'
-import { formatPercent, formatPrice } from '@/lib/format'
+import { formatAmount, formatPercent, formatPrice } from '@/lib/format'
 import Sparkline from '@/components/Sparkline.vue'
 
 interface PreviewItem {
@@ -90,10 +90,7 @@ function forecastOf(bars: QuoteBar[]): string {
 }
 
 function formatVolume(value: number | null): string {
-  if (value === null) return '—'
-  if (value >= 100_000_000) return `${(value / 100_000_000).toFixed(2)} 亿`
-  if (value >= 10_000) return `${(value / 10_000).toFixed(1)} 万`
-  return value.toFixed(0)
+  return value === null ? '—' : formatAmount(value)
 }
 
 watch(() => props.symbols, load, { deep: true, immediate: true })

@@ -166,7 +166,7 @@ function fitModel(bars: QuoteBar[], lookback: number): CoreEstimate | null {
   const slope = regressionSlope(window)
   const fast = ema(window, 12).at(-1) ?? 0
   const slow = ema(window, 26).at(-1) ?? 0
-  const momentum = slow > 0 ? Math.log(fast / slow) : 0
+  const emaGap = slow > 0 ? Math.log(fast / slow) : 0
   const momentum5 = window.length >= 6 ? Math.log(window.at(-1)! / window.at(-6)!) : 0
 
   const recentReturns = returns.slice(-20)
@@ -177,10 +177,10 @@ function fitModel(bars: QuoteBar[], lookback: number): CoreEstimate | null {
   const sd20 = std(window.slice(-20).map((value) => Math.log(Math.max(value, 0.01))))
   const zScore = sd20 > 0 ? (Math.log(closes.at(-1)! / ma20) || 0) / sd20 : 0
 
-  // Blend trend, short momentum and a mild mean-reversion pull. Weights are
-  // deliberately conservative so a single strong week cannot dominate.
+  // Blend trend, short momentum, EMA structure and a mild mean-reversion pull.
+  // Weights are deliberately conservative so one strong week cannot dominate.
   const meanReversion = clamp(zScore, -3, 3) * sigma / Math.sqrt(20)
-  const drift = slope * 0.6 + (momentum5 / 5) * 0.25 - meanReversion * 0.15
+  const drift = slope * 0.55 + (momentum5 / 5) * 0.15 + (emaGap / 10) * 0.15 - meanReversion * 0.15
 
   return {
     drift,
@@ -284,7 +284,7 @@ export function forecastBars(bars: QuoteBar[], options: ForecastOptions = {}): F
   return {
     status: 'ok',
     reason: '',
-    method: '对数价格线性回归（斜率 60%）+ 5 日动量（25%）+ 20 日均值回归修正（15%）；波动率取 20/60 日混合标准差，区间为 80% 正态近似。',
+    method: '对数价格线性回归（55%）+ 5 日动量（15%）+ EMA12/26 差（15%）+ 20 日均值回归修正（15%）；波动率取 20/60 日混合标准差，区间为 80% 正态近似。',
     sampleSize: usable.length,
     lastClose: Math.round(last.close * 100) / 100,
     lastDate: last.date,
