@@ -2,6 +2,7 @@ import type { ChannelMeta, QuoteBar, QuoteSnapshot } from '@/types'
 import { AdapterError, type AdapterContext, type QuoteAdapter } from '@/adapters/types'
 import { fetchJson } from '@/adapters/http'
 import { findProfile } from '@/adapters/mock/universe'
+import { mapWithConcurrency } from '@/lib/concurrency'
 
 /**
  * Live Eastmoney adapter.
@@ -106,8 +107,12 @@ export const eastmoneyQuoteAdapter: QuoteAdapter = {
       throw new AdapterError('PARSE', '东方财富未返回任何行情数据')
     }
 
-    const snapshots = await Promise.all(
-      symbols.map(async (symbol): Promise<QuoteSnapshot | null> => {
+    // Limit concurrency: a 50-symbol pool would otherwise fire 50 kline
+    // requests at once and risk provider rate-limiting.
+    const snapshots = await mapWithConcurrency(
+      symbols,
+      3,
+      async (symbol): Promise<QuoteSnapshot | null> => {
         const diff = diffs.find((item) => item.f12 === symbol)
         if (!diff) return null
         try {
@@ -127,7 +132,8 @@ export const eastmoneyQuoteAdapter: QuoteAdapter = {
           // One failing symbol must not break the whole channel.
           return null
         }
-      }),
+      },
+      120,
     )
 
     const valid = snapshots.filter((item): item is QuoteSnapshot => item !== null)
