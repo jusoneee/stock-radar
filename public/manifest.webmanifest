@@ -1,0 +1,19 @@
+{
+  "name": "Stock Radar · A股行情与新闻双引擎",
+  "short_name": "Stock Radar",
+  "description": "A股行情、趋势统计与新闻事件的本地分析工作台",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0f17",
+  "theme_color": "#0b0f17",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
