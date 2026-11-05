@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useAnalysisStore } from '@/stores/analysis'
+import { useWatchlistStore } from '@/stores/watchlist'
+import { useUniverseStore } from '@/stores/universe'
 import { CHANNEL_CATALOG } from '@/adapters/registry'
+import { getTradingStatus } from '@/lib/trading-calendar'
 import type { NewsAnalysis, Recommendation } from '@/types'
 import { formatAmount, formatDateTime, formatPercent, formatPrice } from '@/lib/format'
 import { adviceLabels, eventTypeLabels, sentimentLabels, stageLabels } from '@/lib/labels'
@@ -12,9 +16,23 @@ import StatTile from '@/components/StatTile.vue'
 import Sparkline from '@/components/Sparkline.vue'
 
 const analysis = useAnalysisStore()
+const watchlist = useWatchlistStore()
+const universe = useUniverseStore()
 const keyword = ref('')
 const selectedSymbol = ref('')
 const newsFilter = ref<'all' | 'positive' | 'negative'>('all')
+
+const trading = computed(() => getTradingStatus())
+
+const latestBarDate = computed(() => {
+  const list = analysis.report?.recommendations ?? []
+  let latest = ''
+  for (const item of list) {
+    const date = item.bars[item.bars.length - 1]?.date ?? ''
+    if (date > latest) latest = date
+  }
+  return latest
+})
 
 const report = computed(() => analysis.report)
 const market = computed(() => analysis.report?.market)
@@ -81,12 +99,21 @@ onMounted(async () => {
         </p>
       </div>
       <div class="page-head-actions">
+        <span class="chip">{{ trading.latestTradingDay }} · {{ trading.phaseLabel }}</span>
         <span v-if="report" class="muted">生成于 {{ formatDateTime(report.generatedAt) }}</span>
         <button class="btn btn-primary" :disabled="analysis.loading" @click="run">
           {{ analysis.loading ? '分析中…' : '重新分析' }}
         </button>
       </div>
     </header>
+
+    <div class="freshness-bar">
+      <span class="tag">自选池 {{ watchlist.count }} 只</span>
+      <span v-if="latestBarDate" class="tag">日 K 截至 {{ latestBarDate }}</span>
+      <span v-if="universe.fetchedAt" class="tag">全市场列表 {{ formatDateTime(universe.fetchedAt) }} 更新</span>
+      <span v-if="universe.isStale && universe.count" class="tag tag-key">全市场列表缓存已过期</span>
+      <RouterLink to="/watchlist" class="muted history-link">管理自选池 →</RouterLink>
+    </div>
 
     <p v-if="analysis.error" class="banner-error">{{ analysis.error }}</p>
 
@@ -106,9 +133,14 @@ onMounted(async () => {
     </div>
 
     <div v-else-if="!report" class="card empty-state">
-      <h2>还没有分析结果</h2>
-      <p>先在「数据源配置」中选择行情与新闻渠道，然后运行一次分析。</p>
-      <button class="btn btn-primary" @click="run">立即运行</button>
+      <h2>{{ watchlist.isEmpty ? '自选池为空' : '还没有分析结果' }}</h2>
+      <p v-if="watchlist.isEmpty">分析以自选池为输入，请先到「自选池」页面搜索添加至少一只股票。</p>
+      <p v-else>先在「数据源配置」中选择行情与新闻渠道，然后运行一次分析。</p>
+      <div class="empty-actions">
+        <RouterLink v-if="watchlist.isEmpty" to="/watchlist" class="btn btn-primary">去添加股票</RouterLink>
+        <button v-else class="btn btn-primary" @click="run">立即运行</button>
+        <RouterLink to="/channels" class="btn btn-ghost">数据源配置</RouterLink>
+      </div>
     </div>
 
     <template v-else>

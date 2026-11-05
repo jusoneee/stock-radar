@@ -2,6 +2,7 @@ import type { ChannelMeta, QuoteBar, QuoteSnapshot } from '@/types'
 import { AdapterError, type AdapterContext, type QuoteAdapter } from '@/adapters/types'
 import { fetchJson, fetchText } from '@/adapters/http'
 import { findProfile } from '@/adapters/mock/universe'
+import { mapWithConcurrency } from '@/lib/concurrency'
 
 /**
  * Live Tencent (腾讯证券) adapter, used as the second quote source so the engine
@@ -99,8 +100,10 @@ export const tencentQuoteAdapter: QuoteAdapter = {
       snapshot = new Map()
     }
 
-    const snapshots = await Promise.all(
-      symbols.map(async (symbol): Promise<QuoteSnapshot | null> => {
+    const snapshots = await mapWithConcurrency(
+      symbols,
+      3,
+      async (symbol): Promise<QuoteSnapshot | null> => {
         try {
           const bars = await fetchDailyBars(symbol, ctx)
           if (bars.length < 20) return null
@@ -117,7 +120,8 @@ export const tencentQuoteAdapter: QuoteAdapter = {
         } catch {
           return null
         }
-      }),
+      },
+      120,
     )
 
     const valid = snapshots.filter((item): item is QuoteSnapshot => item !== null)

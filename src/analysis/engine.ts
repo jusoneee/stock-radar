@@ -198,7 +198,7 @@ export class AnalysisEngine {
       throw new Error('未启用任何行情渠道，请先在「数据源配置」中开启至少一个行情源。')
     }
     if (settings.symbols.length === 0) {
-      throw new Error('股票池为空，请先选择至少一只股票。')
+      throw new Error('自选池为空，请先在「自选池」页面搜索并添加至少一只股票，再运行分析。')
     }
 
     const [quoteBatches, newsBatches] = await Promise.all([

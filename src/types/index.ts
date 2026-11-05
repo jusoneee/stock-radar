@@ -160,6 +160,36 @@ export interface MarketSummary {
   negativeNews: number
 }
 
+/** One A-share symbol from the full market list. */
+export interface UniverseStock {
+  symbol: string
+  name: string
+  market: 'SH' | 'SZ'
+  /** Latest price reported by the list endpoint, if present. */
+  price?: number
+  /** Latest daily change in percent, if present. */
+  pctChange?: number
+  /** Provider quote timestamp (ISO string), used for freshness hints. */
+  quoteTime?: string
+}
+
+/** localStorage payload of the cached full market list. */
+export interface UniverseCachePayload {
+  items: UniverseStock[]
+  fetchedAt: string
+  expiresAt: string
+  source: string
+  providerTotal: number
+}
+
+/** A user-maintained watchlist entry. */
+export interface WatchItem {
+  symbol: string
+  name: string
+  market?: 'SH' | 'SZ'
+  addedAt?: string
+}
+
 export interface ChannelRunResult {
   channelId: string
   ok: boolean
