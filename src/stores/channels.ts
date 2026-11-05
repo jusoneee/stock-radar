@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { CHANNEL_CATALOG, DEFAULT_ENABLED_CHANNELS } from '@/adapters/registry'
-import { DEFAULT_SYMBOLS } from '@/adapters/mock/universe'
 import type { AdapterSettings, ChannelMeta } from '@/types'
 
 const STORAGE_KEY = 'stock-radar:channel-config:v1'
@@ -13,7 +12,6 @@ interface ChannelState {
 
 interface PersistedConfig {
   channels: ChannelState[]
-  symbols: string[]
   timeoutMs?: number
   retryCount?: number
   cacheTtlMs?: number
@@ -45,7 +43,6 @@ export const useChannelsStore = defineStore('channels', {
     channels: [] as ChannelState[],
     /** Keys live in memory only: never persisted, never committed. */
     keys: {} as Record<string, string>,
-    symbols: [...DEFAULT_SYMBOLS] as string[],
     timeoutMs: 8_000,
     /** Extra attempts after a network failure. */
     retryCount: 1,
@@ -75,11 +72,11 @@ export const useChannelsStore = defineStore('channels', {
     },
   },
   actions: {
-    buildSettings(): AdapterSettings {
+    buildSettings(symbols: string[]): AdapterSettings {
       return {
         quoteChannels: this.quoteSettings,
         newsChannels: this.newsSettings,
-        symbols: [...this.symbols],
+        symbols: [...symbols],
         keys: { ...this.keys },
         timeoutMs: this.timeoutMs,
         retryCount: this.retryCount,
@@ -88,7 +85,6 @@ export const useChannelsStore = defineStore('channels', {
     },
     init(): void {
       this.channels = defaultChannels()
-      this.symbols = [...DEFAULT_SYMBOLS]
       this.loadPersisted()
       this.loaded = true
     },
@@ -108,11 +104,6 @@ export const useChannelsStore = defineStore('channels', {
             }
           })
         }
-        if (Array.isArray(parsed.symbols)) {
-          const known = new Set(DEFAULT_SYMBOLS)
-          const filtered = parsed.symbols.filter((symbol) => known.has(symbol))
-          if (filtered.length > 0) this.symbols = filtered
-        }
         if (Number.isFinite(parsed.timeoutMs)) {
           this.timeoutMs = Math.min(60_000, Math.max(2_000, Number(parsed.timeoutMs)))
         }
@@ -130,7 +121,6 @@ export const useChannelsStore = defineStore('channels', {
     persist(): void {
       const payload: PersistedConfig = {
         channels: this.channels.map(({ id, enabled, weight }) => ({ id, enabled, weight })),
-        symbols: this.symbols,
         timeoutMs: this.timeoutMs,
         retryCount: this.retryCount,
         cacheTtlMs: this.cacheTtlMs,
@@ -164,16 +154,6 @@ export const useChannelsStore = defineStore('channels', {
     setKey(id: string, value: string): void {
       this.keys[id] = value.trim()
     },
-    toggleSymbol(symbol: string): void {
-      const index = this.symbols.indexOf(symbol)
-      if (index >= 0) {
-        if (this.symbols.length <= 1) return
-        this.symbols.splice(index, 1)
-      } else {
-        this.symbols.push(symbol)
-      }
-      this.persist()
-    },
     enableAll(kind: 'quote' | 'news', enabled: boolean): void {
       for (const channel of this.channels) {
         const meta = CHANNEL_CATALOG.find((item) => item.id === channel.id)
@@ -183,7 +163,6 @@ export const useChannelsStore = defineStore('channels', {
     },
     reset(): void {
       this.channels = defaultChannels()
-      this.symbols = [...DEFAULT_SYMBOLS]
       this.keys = {}
       this.timeoutMs = 8_000
       this.retryCount = 1

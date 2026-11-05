@@ -3,6 +3,7 @@ import { AnalysisEngine } from '@/analysis/engine'
 import { getAllNewsAdapters, getAllQuoteAdapters } from '@/adapters/registry'
 import type { AnalysisReport } from '@/types'
 import { useChannelsStore } from './channels'
+import { useWatchlistStore } from './watchlist'
 
 export const useAnalysisStore = defineStore('analysis', {
   state: () => ({
@@ -17,6 +18,8 @@ export const useAnalysisStore = defineStore('analysis', {
   actions: {
     async run(): Promise<void> {
       const channels = useChannelsStore()
+      const watchlist = useWatchlistStore()
+      watchlist.init()
       this.loading = true
       this.error = ''
       try {
@@ -24,7 +27,7 @@ export const useAnalysisStore = defineStore('analysis', {
           quoteAdapters: getAllQuoteAdapters(),
           newsAdapters: getAllNewsAdapters(),
         })
-        this.report = await engine.run(channels.buildSettings())
+        this.report = await engine.run(channels.buildSettings(watchlist.symbols))
       } catch (error) {
         this.error = error instanceof Error ? error.message : String(error)
       } finally {
