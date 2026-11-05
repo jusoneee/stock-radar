@@ -5,6 +5,7 @@ import { useChannelsStore } from '@/stores/channels'
 import { useWatchlistStore } from '@/stores/watchlist'
 import { useAnalysisSettingsStore } from '@/stores/analysis-settings'
 import ChannelCard from '@/components/ChannelCard.vue'
+import CustomSourcesPanel from '@/components/CustomSourcesPanel.vue'
 import type { ChannelMeta, ScoreWeights } from '@/types'
 
 const store = useChannelsStore()
@@ -199,6 +200,8 @@ function onCacheTtl(event: Event): void {
         启用后需自行承担第三方 API 的费用、限频与数据合规责任；该开关不影响本地规则链路。
       </p>
     </div>
+
+    <CustomSourcesPanel />
 
     <div class="card">
       <header class="card-head">

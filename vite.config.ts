@@ -46,6 +46,13 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path: string) => path.replace(/^\/api\/tushare/, ''),
       },
+      // User-defined sources go through the local allow-list proxy
+      // (server/proxy.mjs, `npm run proxy`). No target is configured per user;
+      // the target arrives as a validated `target` query parameter.
+      '/api/custom': {
+        target: 'http://localhost:8787',
+        changeOrigin: false,
+      },
     },
   },
 })

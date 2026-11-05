@@ -75,6 +75,7 @@ export class AnalysisEngine {
       timeoutMs: settings.timeoutMs,
       retryCount: settings.retryCount,
       cacheTtlMs: settings.cacheTtlMs,
+      symbols: settings.symbols,
       now,
     }
   }
