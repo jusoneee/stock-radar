@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { UniverseCachePayload, UniverseStock } from '@/types'
+import type { StockProfileLite, UniverseCachePayload, UniverseStock } from '@/types'
 import { fetchUniverse, UNIVERSE_SOURCE } from '@/adapters/universe/eastmoney'
 import { nextTradingSessionStart } from '@/lib/trading-calendar'
 
@@ -52,6 +52,19 @@ export const useUniverseStore = defineStore('universe', {
       return !isFresh(state.expiresAt)
     },
     isLoading: (state): boolean => state.status === 'loading',
+    /** Industry / ST / suspension profile passed to the analysis engine. */
+    profiles: (state): Record<string, StockProfileLite> => {
+      const result: Record<string, StockProfileLite> = {}
+      for (const stock of state.items) {
+        result[stock.symbol] = {
+          name: stock.name,
+          sector: stock.sector,
+          st: stock.st,
+          suspended: stock.suspended,
+        }
+      }
+      return result
+    },
   },
   actions: {
     /** Loads the local cache only; never triggers a network request. */

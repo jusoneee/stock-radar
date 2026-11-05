@@ -34,6 +34,9 @@ const emit = defineEmits<{ (event: 'select-symbol', symbol: string): void }>()
           </span>
           <span class="tag">置信度 {{ (item.confidence * 100).toFixed(0) }}%</span>
           <span class="tag">观察窗口 {{ item.impactWindow }} 个交易日</span>
+          <span class="tag">影响交易日 {{ item.effectiveTradingDay }}</span>
+          <span v-if="item.stale" class="tag tag-key">旧闻降权</span>
+          <span v-if="item.duplicateCount > 1" class="tag">合并 {{ item.duplicateCount }} 条重复报道</span>
         </div>
         <div class="timeline-detail">
           <p><span>阶段判定：</span>{{ item.stageReason }}</p>

@@ -27,6 +27,12 @@ const router = createRouter({
       component: () => import('@/views/AnalysisView.vue'),
       meta: { title: '分析结果' },
     },
+    {
+      path: '/legal/:doc',
+      name: 'legal',
+      component: () => import('@/views/LegalView.vue'),
+      meta: { title: '合规与数据来源' },
+    },
   ],
 })
 

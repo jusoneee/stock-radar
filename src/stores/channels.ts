@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { CHANNEL_CATALOG, DEFAULT_ENABLED_CHANNELS } from '@/adapters/registry'
-import type { AdapterSettings, ChannelMeta } from '@/types'
+import type { AdapterSettings, ChannelMeta, StockProfileLite } from '@/types'
 
 const STORAGE_KEY = 'stock-radar:channel-config:v1'
 
@@ -72,7 +72,7 @@ export const useChannelsStore = defineStore('channels', {
     },
   },
   actions: {
-    buildSettings(symbols: string[]): AdapterSettings {
+    buildSettings(symbols: string[], profiles?: Record<string, StockProfileLite>): AdapterSettings {
       return {
         quoteChannels: this.quoteSettings,
         newsChannels: this.newsSettings,
@@ -81,6 +81,7 @@ export const useChannelsStore = defineStore('channels', {
         timeoutMs: this.timeoutMs,
         retryCount: this.retryCount,
         cacheTtlMs: this.cacheTtlMs,
+        profiles,
       }
     },
     init(): void {

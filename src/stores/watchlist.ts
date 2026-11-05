@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
-import type { WatchItem } from '@/types'
+import type { MarketPrefix, WatchItem } from '@/types'
 import { STOCK_UNIVERSE } from '@/adapters/mock/universe'
+import { marketOfSymbol } from '@/lib/market'
 
 const STORAGE_KEY = 'stock-radar:watchlist:v1'
 const LEGACY_CHANNEL_KEY = 'stock-radar:channel-config:v1'
@@ -9,13 +10,15 @@ const LEGACY_CHANNEL_KEY = 'stock-radar:channel-config:v1'
 export const MAX_WATCHLIST = 50
 
 export type AddResult = 'added' | 'exists' | 'full' | 'invalid'
+export type WatchSortMode = 'manual' | 'name' | 'symbol' | 'added'
 
-function marketOf(symbol: string): 'SH' | 'SZ' {
-  return symbol.startsWith('6') ? 'SH' : 'SZ'
+function marketOf(symbol: string): MarketPrefix {
+  return marketOfSymbol(symbol)
 }
 
 function isValidSymbol(symbol: string): boolean {
-  return /^[036]\d{5}$/.test(symbol)
+  // Shanghai / Shenzhen main boards, STAR, ChiNext, Beijing Stock Exchange.
+  return /^(0|3|4|6|8)\d{5}$/.test(symbol) || /^92\d{4}$/.test(symbol)
 }
 
 function defaultItems(): WatchItem[] {
@@ -52,12 +55,23 @@ export const useWatchlistStore = defineStore('watchlist', {
     initialized: false,
     /** Last user-facing rejection reason, e.g. pool full. */
     notice: '',
+    /** Manual order follows the array; other modes are applied by the view. */
+    sortMode: 'manual' as WatchSortMode,
   }),
   getters: {
     count: (state): number => state.items.length,
     symbols: (state): string[] => state.items.map((item) => item.symbol),
     isEmpty: (state): boolean => state.items.length === 0,
     isFull: (state): boolean => state.items.length >= MAX_WATCHLIST,
+    /** Distinct user groups, default group first. */
+    groups: (state): string[] => {
+      const names = new Set<string>()
+      for (const item of state.items) {
+        const name = item.group?.trim()
+        if (name) names.add(name)
+      }
+      return Array.from(names).sort((a, b) => a.localeCompare(b, 'zh-CN'))
+    },
   },
   actions: {
     init(): void {
@@ -77,7 +91,7 @@ export const useWatchlistStore = defineStore('watchlist', {
           }
           return
         }
-        const parsed = JSON.parse(raw) as { items?: unknown }
+        const parsed = JSON.parse(raw) as { items?: unknown; sortMode?: unknown }
         if (!Array.isArray(parsed.items)) return
         const seen = new Set<string>()
         const items: WatchItem[] = []
@@ -89,20 +103,29 @@ export const useWatchlistStore = defineStore('watchlist', {
           items.push({
             symbol: candidate.symbol,
             name: typeof candidate.name === 'string' && candidate.name ? candidate.name : candidate.symbol,
-            market: candidate.market === 'SH' || candidate.market === 'SZ' ? candidate.market : marketOf(candidate.symbol),
+            market:
+              candidate.market === 'SH' || candidate.market === 'SZ' || candidate.market === 'BJ'
+                ? candidate.market
+                : marketOf(candidate.symbol),
+            group: typeof candidate.group === 'string' && candidate.group.trim() ? candidate.group.trim() : undefined,
             addedAt: candidate.addedAt,
           })
           if (items.length >= MAX_WATCHLIST) break
         }
         // An explicitly saved empty list is a valid user choice.
         this.items = items
+        if (parsed.sortMode === 'name' || parsed.sortMode === 'symbol' || parsed.sortMode === 'added') {
+          this.sortMode = parsed.sortMode
+        } else if (parsed.sortMode === 'manual') {
+          this.sortMode = 'manual'
+        }
       } catch {
         localStorage.removeItem(STORAGE_KEY)
       }
     },
     persist(): void {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ items: this.items }))
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ items: this.items, sortMode: this.sortMode }))
       } catch {
         // Ignore quota errors; the list stays usable in memory.
       }
@@ -110,7 +133,7 @@ export const useWatchlistStore = defineStore('watchlist', {
     has(symbol: string): boolean {
       return this.items.some((item) => item.symbol === symbol)
     },
-    add(stock: { symbol: string; name: string; market?: 'SH' | 'SZ' }): AddResult {
+    add(stock: { symbol: string; name: string; market?: MarketPrefix; group?: string }): AddResult {
       const symbol = stock.symbol.trim()
       if (!isValidSymbol(symbol)) return 'invalid'
       if (this.has(symbol)) return 'exists'
@@ -119,6 +142,7 @@ export const useWatchlistStore = defineStore('watchlist', {
         symbol,
         name: stock.name.trim() || symbol,
         market: stock.market ?? marketOf(symbol),
+        group: stock.group?.trim() || undefined,
         addedAt: new Date().toISOString(),
       })
       this.notice = ''
@@ -127,6 +151,28 @@ export const useWatchlistStore = defineStore('watchlist', {
     },
     remove(symbol: string): void {
       this.items = this.items.filter((item) => item.symbol !== symbol)
+      this.persist()
+    },
+    /** Assign (or clear) the group of one symbol. */
+    setGroup(symbol: string, group: string): void {
+      const item = this.items.find((entry) => entry.symbol === symbol)
+      if (!item) return
+      item.group = group.trim() || undefined
+      this.persist()
+    },
+    /** Move one item up or down in manual order. */
+    move(symbol: string, direction: -1 | 1): void {
+      const index = this.items.findIndex((item) => item.symbol === symbol)
+      const target = index + direction
+      if (index < 0 || target < 0 || target >= this.items.length) return
+      const [item] = this.items.splice(index, 1)
+      if (!item) return
+      this.items.splice(target, 0, item)
+      this.sortMode = 'manual'
+      this.persist()
+    },
+    setSortMode(mode: WatchSortMode): void {
+      this.sortMode = mode
       this.persist()
     },
     clear(): void {

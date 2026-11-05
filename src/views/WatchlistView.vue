@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { MAX_WATCHLIST, useWatchlistStore } from '@/stores/watchlist'
+import { MAX_WATCHLIST, useWatchlistStore, type WatchSortMode } from '@/stores/watchlist'
 import { useUniverseStore } from '@/stores/universe'
 import { getTradingStatus } from '@/lib/trading-calendar'
 import { formatDateTime, formatPercent, formatPrice } from '@/lib/format'
-import type { UniverseStock } from '@/types'
+import { marketLabel, symbolText } from '@/lib/market'
+import type { UniverseStock, WatchItem } from '@/types'
 
 const watchlist = useWatchlistStore()
 const universe = useUniverseStore()
 
 const query = ref('')
 const feedback = ref('')
+const groupFilter = ref('')
+const groupInput = ref('')
 
 const trading = getTradingStatus()
 
@@ -24,6 +27,34 @@ const progressPercent = computed(() => {
 const latestQuoteTime = computed(() => universe.latestQuoteTime())
 const hasUniverse = computed(() => universe.items.length > 0)
 
+const sortOptions: Array<{ value: WatchSortMode; label: string }> = [
+  { value: 'manual', label: '手动顺序' },
+  { value: 'name', label: '按名称' },
+  { value: 'symbol', label: '按代码' },
+  { value: 'added', label: '按添加时间' },
+]
+
+const sortedItems = computed<WatchItem[]>(() => {
+  const items = [...watchlist.items]
+  switch (watchlist.sortMode) {
+    case 'name':
+      return items.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+    case 'symbol':
+      return items.sort((a, b) => a.symbol.localeCompare(b.symbol))
+    case 'added':
+      return items.sort((a, b) => (a.addedAt ?? '').localeCompare(b.addedAt ?? ''))
+    default:
+      return items
+  }
+})
+
+const poolItems = computed<WatchItem[]>(() => {
+  const filter = groupFilter.value
+  if (!filter) return sortedItems.value
+  if (filter === '__default__') return sortedItems.value.filter((item) => !item.group)
+  return sortedItems.value.filter((item) => item.group === filter)
+})
+
 onMounted(async () => {
   watchlist.init()
   universe.init()
@@ -31,11 +62,22 @@ onMounted(async () => {
 })
 
 function addStock(stock: UniverseStock): void {
-  const result = watchlist.add({ symbol: stock.symbol, name: stock.name, market: stock.market })
-  if (result === 'added') feedback.value = `已添加 ${stock.name}（${stock.symbol}）`
+  const result = watchlist.add({
+    symbol: stock.symbol,
+    name: stock.name,
+    market: stock.market,
+    group: groupInput.value.trim() || undefined,
+  })
+  if (result === 'added') feedback.value = `已添加 ${stock.name}（${symbolText(stock.symbol)}）`
   else if (result === 'exists') feedback.value = `${stock.name} 已在自选池中`
   else if (result === 'full') feedback.value = `自选池最多 ${MAX_WATCHLIST} 只，请先移除部分标的后再添加`
   else feedback.value = '股票代码无效'
+}
+
+function applyGroup(symbol: string, event: Event): void {
+  const target = event.target as HTMLInputElement
+  watchlist.setGroup(symbol, target.value)
+  target.value = target.value.trim()
 }
 
 function restoreDefaults(): void {
@@ -65,8 +107,8 @@ async function loadUniverse(): Promise<void> {
       <div>
         <h1>自选池</h1>
         <p>
-          从真实全市场列表（沪深 A 股，约 5000+ 只）搜索并维护分析标的。分析页与分析引擎只读取这里的池子，
-          最多 {{ MAX_WATCHLIST }} 只，配置保存在浏览器本地。
+          从真实全市场列表（沪深 + 北交所 A 股，约 5900 只）搜索并维护分析标的。支持分组与手动排序，
+          分析页与分析引擎只读取这里的池子，最多 {{ MAX_WATCHLIST }} 只，配置保存在浏览器本地。
         </p>
       </div>
       <div class="page-head-actions">
@@ -111,6 +153,18 @@ async function loadUniverse(): Promise<void> {
           placeholder="输入股票代码或名称，例如 600519 / 茅台"
           :disabled="!hasUniverse"
         />
+        <input
+          v-model="groupInput"
+          class="search-input group-input"
+          type="text"
+          maxlength="12"
+          placeholder="新加标的分组（可选）"
+          list="watch-groups"
+          :disabled="!hasUniverse"
+        />
+        <datalist id="watch-groups">
+          <option v-for="name in watchlist.groups" :key="name" :value="name" />
+        </datalist>
         <span class="muted">
           <template v-if="universe.status === 'loading'">正在分页抓取全市场列表…</template>
           <template v-else-if="hasUniverse">
@@ -138,7 +192,10 @@ async function loadUniverse(): Promise<void> {
         <div v-for="stock in results" :key="stock.symbol" class="result-item">
           <div class="result-main">
             <strong>{{ stock.name }}</strong>
-            <span class="muted">{{ stock.symbol }} · {{ stock.market === 'SH' ? '沪市' : '深市' }}</span>
+            <span class="muted">{{ symbolText(stock.symbol) }} · {{ marketLabel(stock.market) }}</span>
+            <span v-if="stock.sector" class="tag">{{ stock.sector }}</span>
+            <span v-if="stock.st" class="tag tag-key">ST</span>
+            <span v-if="stock.suspended" class="tag tag-key">疑似停牌</span>
           </div>
           <div class="result-quote">
             <span v-if="stock.price !== undefined" class="num">{{ formatPrice(stock.price) }}</span>
@@ -167,6 +224,24 @@ async function loadUniverse(): Promise<void> {
       <header class="card-head">
         <h2>当前自选池 <span class="muted">{{ watchlist.count }} / {{ MAX_WATCHLIST }}</span></h2>
         <div class="card-head-actions">
+          <label class="inline-label">
+            分组
+            <select v-model="groupFilter" class="select-input">
+              <option value="">全部</option>
+              <option value="__default__">未分组</option>
+              <option v-for="name in watchlist.groups" :key="name" :value="name">{{ name }}</option>
+            </select>
+          </label>
+          <label class="inline-label">
+            排序
+            <select
+              :value="watchlist.sortMode"
+              class="select-input"
+              @change="watchlist.setSortMode(($event.target as HTMLSelectElement).value as WatchSortMode)"
+            >
+              <option v-for="option in sortOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+          </label>
           <button class="btn btn-mini" @click="restoreDefaults">恢复默认</button>
           <button class="btn btn-mini" :disabled="watchlist.isEmpty" @click="clearPool">清空</button>
         </div>
@@ -182,15 +257,45 @@ async function loadUniverse(): Promise<void> {
       </div>
 
       <div v-else class="pool-grid">
-        <div v-for="item in watchlist.items" :key="item.symbol" class="pool-card">
+        <div v-for="(item, index) in poolItems" :key="item.symbol" class="pool-card">
           <div class="pool-card-main">
             <strong>{{ item.name }}</strong>
-            <span class="muted">{{ item.symbol }} · {{ item.market === 'SH' ? '沪市' : '深市' }}</span>
+            <span class="muted">{{ symbolText(item.symbol) }} · {{ marketLabel(item.market) }}</span>
+          </div>
+          <div class="pool-card-tools">
+            <input
+              class="group-input"
+              type="text"
+              maxlength="12"
+              placeholder="分组"
+              :value="item.group ?? ''"
+              :aria-label="`${item.name} 的分组`"
+              @change="applyGroup(item.symbol, $event)"
+            />
+            <button
+              class="pool-move"
+              type="button"
+              :disabled="watchlist.sortMode !== 'manual' || index === 0"
+              :aria-label="`上移 ${item.name}`"
+              @click="watchlist.move(item.symbol, -1)"
+            >
+              ↑
+            </button>
+            <button
+              class="pool-move"
+              type="button"
+              :disabled="watchlist.sortMode !== 'manual' || index === poolItems.length - 1"
+              :aria-label="`下移 ${item.name}`"
+              @click="watchlist.move(item.symbol, 1)"
+            >
+              ↓
+            </button>
           </div>
           <button class="pool-remove" type="button" :aria-label="`移除 ${item.name}`" @click="watchlist.remove(item.symbol)">
             ×
           </button>
         </div>
+        <p v-if="poolItems.length === 0" class="empty-text">当前分组下没有股票。</p>
       </div>
 
       <p v-if="watchlist.isFull" class="inline-warn">

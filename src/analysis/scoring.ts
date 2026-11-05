@@ -1,4 +1,4 @@
-import type { Indicators, NewsAnalysis, ScoreBreakdownItem, TrendResult } from '@/types'
+import type { Indicators, NewsAnalysis, ScoreBreakdownItem, ScoreWeights, TrendResult } from '@/types'
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -6,6 +6,40 @@ function clamp(value: number, min: number, max: number): number {
 
 function round(value: number): number {
   return Math.round(value * 10) / 10
+}
+
+/** Default factor weights; the settings store can override them at runtime. */
+export const DEFAULT_SCORE_WEIGHTS: ScoreWeights = {
+  trend: 0.4,
+  momentum: 0.15,
+  volume: 0.15,
+  position: 0.15,
+  news: 0.15,
+}
+
+const WEIGHT_LABELS: Record<keyof ScoreWeights, string> = {
+  trend: '趋势结构',
+  momentum: '动量强度',
+  volume: '量能配合',
+  position: '区间位置',
+  news: '事件驱动',
+}
+
+/** Normalize user weights to sum to 1; all-zero input falls back to equal weights. */
+export function normalizeWeights(weights: ScoreWeights): ScoreWeights {
+  const values = Object.values(weights).map((value) => Math.max(0, value))
+  const total = values.reduce((sum, value) => sum + value, 0)
+  if (total <= 0) {
+    const share = 1 / values.length
+    return { trend: share, momentum: share, volume: share, position: share, news: share }
+  }
+  return {
+    trend: weights.trend / total,
+    momentum: weights.momentum / total,
+    volume: weights.volume / total,
+    position: weights.position / total,
+    news: weights.news / total,
+  }
 }
 
 const STAGE_ADJUST: Record<NewsAnalysis['sentiment'], Record<NewsAnalysis['stage'], number>> = {
@@ -24,16 +58,24 @@ export function scoreNews(news: NewsAnalysis[]): NewsScore {
     return { score: 50, detail: '未匹配到相关新闻事件，按中性处理' }
   }
   let adjustment = 0
+  let staleCount = 0
+  let duplicateCount = 0
   for (const item of news) {
     const base = STAGE_ADJUST[item.sentiment][item.stage]
-    adjustment += base * (0.6 + item.confidence * 0.4)
+    // Old / recycled coverage must not be treated with the same weight as fresh news.
+    const freshness = item.stale ? 0.35 : 1
+    adjustment += base * (0.6 + item.confidence * 0.4) * freshness
+    if (item.stale) staleCount += 1
+    duplicateCount += Math.max(0, item.duplicateCount - 1)
   }
   const score = clamp(50 + adjustment, 0, 100)
   const positive = news.filter((item) => item.sentiment === 'positive').length
   const negative = news.filter((item) => item.sentiment === 'negative').length
+  const staleNote = staleCount > 0 ? `，其中 ${staleCount} 条为旧闻已降权` : ''
+  const duplicateNote = duplicateCount > 0 ? `，合并 ${duplicateCount} 条重复报道` : ''
   return {
     score: round(score),
-    detail: `${news.length} 条相关事件（利好 ${positive} / 利空 ${negative}），事件周期加权后 ${score >= 50 ? '偏正面' : '偏负面'}`,
+    detail: `${news.length} 条相关事件（利好 ${positive} / 利空 ${negative}）${staleNote}${duplicateNote}，事件周期加权后 ${score >= 50 ? '偏正面' : '偏负面'}`,
   }
 }
 
@@ -74,37 +116,51 @@ export function scoreStock(
   news: NewsScore,
   newsItems: NewsAnalysis[],
   sourceCount: number,
+  weights: ScoreWeights = DEFAULT_SCORE_WEIGHTS,
 ): ScoreResult {
   const momentumScore = clamp(50 + indicators.pctChange5d * 4, 0, 100)
   const volumeScore = clamp(indicators.volumeRatio * 60, 0, 100)
   const positionScore = clamp(indicators.rangePosition * 100, 0, 100)
+  const normalized = normalizeWeights(weights)
 
   const breakdown: ScoreBreakdownItem[] = [
-    { key: 'trend', label: '趋势结构', score: trend.score, weight: 0.4, detail: trend.reasons.join('；') },
+    {
+      key: 'trend',
+      label: WEIGHT_LABELS.trend,
+      score: trend.score,
+      weight: round(normalized.trend * 100) / 100,
+      detail: trend.reasons.join('；'),
+    },
     {
       key: 'momentum',
-      label: '动量强度',
+      label: WEIGHT_LABELS.momentum,
       score: round(momentumScore),
-      weight: 0.15,
+      weight: round(normalized.momentum * 100) / 100,
       detail: `5 日涨跌 ${indicators.pctChange5d}%，1 日涨跌 ${indicators.pctChange1d}%`,
     },
     {
       key: 'volume',
-      label: '量能配合',
+      label: WEIGHT_LABELS.volume,
       score: round(volumeScore),
-      weight: 0.15,
+      weight: round(normalized.volume * 100) / 100,
       detail: `量比 ${indicators.volumeRatio} 倍（近 5 日均量基准）`,
     },
     {
       key: 'position',
-      label: '区间位置',
+      label: WEIGHT_LABELS.position,
       score: round(positionScore),
-      weight: 0.15,
+      weight: round(normalized.position * 100) / 100,
       detail: indicators.breakout20
         ? '收盘价突破 20 日区间上沿'
         : `位于 20 日区间 ${(indicators.rangePosition * 100).toFixed(0)}% 分位`,
     },
-    { key: 'news', label: '事件驱动', score: round(news.score), weight: 0.15, detail: news.detail },
+    {
+      key: 'news',
+      label: WEIGHT_LABELS.news,
+      score: round(news.score),
+      weight: round(normalized.news * 100) / 100,
+      detail: news.detail,
+    },
   ]
 
   const totalScore = round(breakdown.reduce((sum, item) => sum + item.score * item.weight, 0))
@@ -116,6 +172,9 @@ export function scoreStock(
   if (sourceCount < 2) riskFlags.push('仅单一数据源覆盖，数据可靠性待交叉校验')
   if (newsItems.some((item) => item.sentiment === 'negative' && item.stage === 'confirmed')) {
     riskFlags.push('存在已确认的利空事件，需关注后续影响')
+  }
+  if (newsItems.some((item) => item.stale)) {
+    riskFlags.push('部分关联事件为旧闻或重复报道，已在评分中降权')
   }
 
   return {

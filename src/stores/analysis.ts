@@ -4,6 +4,8 @@ import { getAllNewsAdapters, getAllQuoteAdapters } from '@/adapters/registry'
 import type { AnalysisReport } from '@/types'
 import { useChannelsStore } from './channels'
 import { useWatchlistStore } from './watchlist'
+import { useUniverseStore } from './universe'
+import { useAnalysisSettingsStore } from './analysis-settings'
 
 export const useAnalysisStore = defineStore('analysis', {
   state: () => ({
@@ -19,7 +21,11 @@ export const useAnalysisStore = defineStore('analysis', {
     async run(): Promise<void> {
       const channels = useChannelsStore()
       const watchlist = useWatchlistStore()
+      const universe = useUniverseStore()
+      const analysisSettings = useAnalysisSettingsStore()
       watchlist.init()
+      universe.init()
+      analysisSettings.init()
       this.loading = true
       this.error = ''
       try {
@@ -27,7 +33,9 @@ export const useAnalysisStore = defineStore('analysis', {
           quoteAdapters: getAllQuoteAdapters(),
           newsAdapters: getAllNewsAdapters(),
         })
-        this.report = await engine.run(channels.buildSettings(watchlist.symbols))
+        this.report = await engine.run(channels.buildSettings(watchlist.symbols, universe.profiles), {
+          scoreWeights: analysisSettings.normalizedWeights,
+        })
       } catch (error) {
         this.error = error instanceof Error ? error.message : String(error)
       } finally {

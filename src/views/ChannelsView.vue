@@ -3,11 +3,22 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useChannelsStore } from '@/stores/channels'
 import { useWatchlistStore } from '@/stores/watchlist'
+import { useAnalysisSettingsStore } from '@/stores/analysis-settings'
 import ChannelCard from '@/components/ChannelCard.vue'
-import type { ChannelMeta } from '@/types'
+import type { ChannelMeta, ScoreWeights } from '@/types'
 
 const store = useChannelsStore()
 const watchlist = useWatchlistStore()
+const analysisSettings = useAnalysisSettingsStore()
+analysisSettings.init()
+
+const weightFields: Array<{ key: keyof ScoreWeights; label: string; hint: string }> = [
+  { key: 'trend', label: '趋势结构', hint: '均线排列与斜率' },
+  { key: 'momentum', label: '动量强度', hint: '5 日累计涨跌' },
+  { key: 'volume', label: '量能配合', hint: '量比与放量' },
+  { key: 'position', label: '区间位置', hint: '20 日区间与突破' },
+  { key: 'news', label: '事件驱动', hint: '事件阶段与情绪' },
+]
 
 interface ChannelView {
   meta: ChannelMeta
@@ -111,6 +122,82 @@ function onCacheTtl(event: Event): void {
         />
       </div>
       <p v-if="newsEnabled === 0" class="inline-warn">未启用新闻源时，事件驱动分项按中性 50 分处理。</p>
+    </div>
+
+    <div class="card">
+      <header class="card-head">
+        <h2>评分权重</h2>
+        <div class="card-head-actions">
+          <span class="tag">归一化后自动折算为 100%</span>
+          <button class="btn btn-mini" @click="analysisSettings.resetWeights()">恢复默认</button>
+        </div>
+      </header>
+      <div class="policy-grid">
+        <label v-for="field in weightFields" :key="field.key" class="policy-field">
+          <span>{{ field.label }} <em class="muted">{{ analysisSettings.weightPercent[field.key] }}%</em></span>
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            :value="analysisSettings.weights[field.key]"
+            @change="analysisSettings.setWeight(field.key, Number(($event.target as HTMLInputElement).value))"
+          />
+          <small class="muted">{{ field.hint }}</small>
+        </label>
+      </div>
+      <p class="hint-text">
+        权重仅影响候选排序，不改变指标与事件判定；调整后需重新运行分析才会生效。
+      </p>
+    </div>
+
+    <div class="card">
+      <header class="card-head">
+        <h2>AI 增强（未启用）</h2>
+        <span class="tag tag-key">依赖外部凭据</span>
+      </header>
+      <div class="policy-grid">
+        <label class="policy-field">
+          <span>启用 LLM / NER 增强</span>
+          <input
+            type="checkbox"
+            :checked="analysisSettings.llm.enabled"
+            @change="analysisSettings.setLlm({ enabled: ($event.target as HTMLInputElement).checked })"
+          />
+        </label>
+        <label class="policy-field">
+          <span>接口地址</span>
+          <input
+            type="url"
+            placeholder="https://your-llm-gateway/v1"
+            :value="analysisSettings.llm.endpoint"
+            @change="analysisSettings.setLlm({ endpoint: ($event.target as HTMLInputElement).value })"
+          />
+        </label>
+        <label class="policy-field">
+          <span>模型名称</span>
+          <input
+            type="text"
+            placeholder="例如 qwen-plus"
+            :value="analysisSettings.llm.model"
+            @change="analysisSettings.setLlm({ model: ($event.target as HTMLInputElement).value })"
+          />
+        </label>
+        <label class="policy-field">
+          <span>API Key（仅本次会话）</span>
+          <input
+            type="password"
+            autocomplete="off"
+            placeholder="不会写入本地存储"
+            :value="analysisSettings.llmApiKey"
+            @input="analysisSettings.llmApiKey = ($event.target as HTMLInputElement).value"
+          />
+        </label>
+      </div>
+      <p class="hint-text">
+        当前版本仅提供配置位：未配置外部密钥时不会发起任何 LLM 请求，事件抽取、情绪与阶段全部由本地规则完成。
+        启用后需自行承担第三方 API 的费用、限频与数据合规责任；该开关不影响本地规则链路。
+      </p>
     </div>
 
     <div class="card">

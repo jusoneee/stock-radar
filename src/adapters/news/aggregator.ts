@@ -4,13 +4,12 @@ import { buildNewsItems } from '@/adapters/mock/news'
 
 const META: ChannelMeta = {
   id: 'news-aggregator',
-  name: '新闻聚合（多源）',
+  name: '新闻聚合（模拟兜底）',
   kind: 'news',
   provider: '自建聚合器',
-  description: '聚合公告、财经媒体与研报摘要，覆盖面广但噪声较多，需要更严格的去重与可信度打分。',
+  description: '模拟离线兜底数据：用于无网络演示，不代表真实资讯；真实多源聚合尚未接入。',
   requiresKey: false,
-  docsUrl: 'https://docs.example.com/news-aggregator',
-  reliability: 0.78,
+  reliability: 0.5,
   latencyMs: 480,
   simulated: true,
 }

@@ -1,4 +1,4 @@
-import type { UniverseStock } from '@/types'
+import type { MarketPrefix, UniverseStock } from '@/types'
 import { AdapterError, type AdapterContext } from '@/adapters/types'
 import { fetchJson } from '@/adapters/http'
 import { mapWithConcurrency } from '@/lib/concurrency'
@@ -9,12 +9,12 @@ import { mapWithConcurrency } from '@/lib/concurrency'
  * Endpoint (verified 2026-11-05, direct connection, no key):
  *   https://push2.eastmoney.com/api/qt/clist/get
  *
- * - `fs` selects Shanghai main board / STAR market and Shenzhen main board /
- *   ChiNext. Beijing Stock Exchange is intentionally excluded because the quote
- *   adapters only know `sh`/`sz` prefixes.
- * - The server caps `pz` at 100, so the ~5.5k universe needs 56 pages.
+ * - `fs` selects Shanghai / Shenzhen main boards, STAR, ChiNext and the Beijing
+ *   Stock Exchange (market prefix `bj`).
+ * - The server caps `pz` at 100, so the ~5.9k universe needs ~60 pages.
  * - Response echoes the caller Origin (`Access-Control-Allow-Origin: *`), so a
  *   browser can call it directly.
+ * - `f100` carries the industry classification, `f2` is `"-"` while suspended.
  *
  * Fetching is serialized with a small concurrency limit and a per-request
  * spacing delay to avoid tripping provider risk-control; callers cache the
@@ -23,15 +23,17 @@ import { mapWithConcurrency } from '@/lib/concurrency'
 const LIST_BASE = 'https://push2.eastmoney.com/api/qt/clist/get'
 const PAGE_SIZE = 100
 const MAX_PAGES = 80
+const FS = 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048'
 
-export const UNIVERSE_SOURCE = '东方财富行情列表（push2.clist）'
+export const UNIVERSE_SOURCE = '东方财富行情列表（push2.clist，沪深 + 北交所）'
 
 interface EastmoneyRow {
-  f2?: number
-  f3?: number
+  f2?: number | string
+  f3?: number | string
   f12?: string
   f13?: number
   f14?: string
+  f100?: string
   f124?: number
 }
 
@@ -60,7 +62,7 @@ export interface UniverseFetchResult {
 function buildPageUrl(page: number): string {
   return (
     `${LIST_BASE}?pn=${page}&pz=${PAGE_SIZE}&po=1&np=1&fltt=2&invt=2&fid=f12` +
-    '&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23&fields=f12,f13,f14,f2,f3,f124'
+    `&fs=${FS}&fields=f12,f13,f14,f2,f3,f100,f124`
   )
 }
 
@@ -70,18 +72,44 @@ function rowsOf(payload: EastmoneyListResponse): EastmoneyRow[] {
   return Object.values(diff ?? {})
 }
 
+function toNumber(value: number | string | undefined): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined
+  if (typeof value !== 'string' || value.trim() === '' || value.trim() === '-') return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function marketOf(symbol: string, flag: number | undefined): MarketPrefix | null {
+  if (symbol.startsWith('6')) return 'SH'
+  if (symbol.startsWith('0') || symbol.startsWith('3')) return 'SZ'
+  if (symbol.startsWith('4') || symbol.startsWith('8') || symbol.startsWith('92')) return 'BJ'
+  // Anything else (B shares, funds, indices) is intentionally excluded.
+  void flag
+  return null
+}
+
 function toStock(row: EastmoneyRow): UniverseStock | null {
   const symbol = row.f12?.trim()
   const name = row.f14?.trim()
-  // Keep only SH/SZ A-share codes: 600/601/603/605/688, 000/001/002/003, 300/301.
-  if (!symbol || !/^[036]\d{5}$/.test(symbol) || !name || name === '-') return null
+  if (!symbol || !name || name === '-') return null
+  if (!/^(0|3|4|6|8|9)[0-9]{5}$/.test(symbol)) return null
+  const market = marketOf(symbol, row.f13)
+  if (!market) return null
+
+  const price = toNumber(row.f2)
+  const pctChange = toNumber(row.f3)
+  const sector = row.f100?.trim() && row.f100.trim() !== '-' ? row.f100.trim() : undefined
+
   return {
     symbol,
     name,
-    market: row.f13 === 1 || symbol.startsWith('6') ? 'SH' : 'SZ',
-    price: typeof row.f2 === 'number' ? row.f2 : undefined,
-    pctChange: typeof row.f3 === 'number' ? row.f3 : undefined,
+    market,
+    sector,
+    price,
+    pctChange,
     quoteTime: row.f124 ? new Date(row.f124 * 1000).toISOString() : undefined,
+    st: /^\*?ST/.test(name),
+    suspended: price === undefined,
   }
 }
 
@@ -109,7 +137,7 @@ export async function fetchUniverse(
 
   const pageCount = Math.min(MAX_PAGES, Math.ceil(providerTotal / PAGE_SIZE))
   const collected: UniverseStock[] = []
-  let failedPages: number[] = []
+  const failedPages: number[] = []
   let loaded = 0
 
   const merge = (rows: EastmoneyRow[]): void => {

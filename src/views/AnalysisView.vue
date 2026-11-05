@@ -1,28 +1,47 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAnalysisStore } from '@/stores/analysis'
 import { useWatchlistStore } from '@/stores/watchlist'
 import { useUniverseStore } from '@/stores/universe'
+import { useAnalysisSettingsStore } from '@/stores/analysis-settings'
+import { useSnapshotsStore } from '@/stores/snapshots'
 import { CHANNEL_CATALOG } from '@/adapters/registry'
 import { getTradingStatus } from '@/lib/trading-calendar'
-import type { NewsAnalysis, Recommendation } from '@/types'
+import type { AnalysisSnapshot, EventStage, NewsAnalysis, Recommendation, TrendLabel } from '@/types'
 import { formatAmount, formatDateTime, formatPercent, formatPrice } from '@/lib/format'
-import { adviceLabels, eventTypeLabels, sentimentLabels, stageLabels } from '@/lib/labels'
+import { adviceLabels, eventTypeLabels, sentimentLabels, stageLabels, trendLabels } from '@/lib/labels'
+import {
+  DISCLAIMER,
+  exportRecommendationsCsv,
+  exportRecommendationsJson,
+  exportReportMarkdown,
+} from '@/lib/export'
 import RecommendationTable from '@/components/RecommendationTable.vue'
 import NewsTimeline from '@/components/NewsTimeline.vue'
 import TrendBadge from '@/components/TrendBadge.vue'
 import StatTile from '@/components/StatTile.vue'
-import Sparkline from '@/components/Sparkline.vue'
+import KlineChart from '@/components/KlineChart.vue'
 
 const analysis = useAnalysisStore()
 const watchlist = useWatchlistStore()
 const universe = useUniverseStore()
+const settings = useAnalysisSettingsStore()
+const snapshots = useSnapshotsStore()
 const keyword = ref('')
 const selectedSymbol = ref('')
 const newsFilter = ref<'all' | 'positive' | 'negative'>('all')
+const sectorFilter = ref('')
+const trendFilter = ref<'all' | TrendLabel>('all')
+const stageFilter = ref<'all' | EventStage>('all')
+const minScore = ref(0)
+const maxScore = ref(100)
+const sortBy = ref<'score' | 'change' | 'volume' | 'name'>('score')
+const compareId = ref('')
 
 const trading = computed(() => getTradingStatus())
+const report = computed(() => analysis.report)
+const market = computed(() => analysis.report?.market)
 
 const latestBarDate = computed(() => {
   const list = analysis.report?.recommendations ?? []
@@ -34,16 +53,50 @@ const latestBarDate = computed(() => {
   return latest
 })
 
-const report = computed(() => analysis.report)
-const market = computed(() => analysis.report?.market)
+const sectorOptions = computed(() => {
+  const sectors = new Set<string>()
+  for (const item of analysis.report?.recommendations ?? []) {
+    if (item.sector) sectors.add(item.sector)
+  }
+  return Array.from(sectors).sort((a, b) => a.localeCompare(b, 'zh-CN'))
+})
+
+const trendOptions = Object.entries(trendLabels) as Array<[TrendLabel, { text: string }]>
+const stageOptions = Object.entries(stageLabels) as Array<[EventStage, { text: string }]>
+const stageRank: Record<EventStage, number> = { fermenting: 0, confirmed: 1, fading: 2 }
+
+/** Most advanced event stage related to a stock, used by the stage filter. */
+function primaryStage(item: Recommendation): EventStage | null {
+  if (item.news.length === 0) return null
+  return item.news.reduce<EventStage>(
+    (current, news) => (stageRank[news.stage] > stageRank[current] ? news.stage : current),
+    item.news[0]!.stage,
+  )
+}
 
 const filtered = computed<Recommendation[]>(() => {
-  const list = analysis.report?.recommendations ?? []
   const query = keyword.value.trim().toLowerCase()
-  if (!query) return list
-  return list.filter(
-    (item) => item.name.toLowerCase().includes(query) || item.symbol.includes(query) || item.sector.includes(query),
-  )
+  const list = (analysis.report?.recommendations ?? []).filter((item) => {
+    if (query && !item.name.toLowerCase().includes(query) && !item.symbol.includes(query) && !item.sector.includes(query)) {
+      return false
+    }
+    if (sectorFilter.value && item.sector !== sectorFilter.value) return false
+    if (trendFilter.value !== 'all' && item.trend.label !== trendFilter.value) return false
+    if (stageFilter.value !== 'all' && primaryStage(item) !== stageFilter.value) return false
+    if (item.totalScore < minScore.value || item.totalScore > maxScore.value) return false
+    return true
+  })
+  const sorted = [...list]
+  switch (sortBy.value) {
+    case 'change':
+      return sorted.sort((a, b) => b.indicators.pctChange1d - a.indicators.pctChange1d)
+    case 'volume':
+      return sorted.sort((a, b) => b.indicators.volumeRatio - a.indicators.volumeRatio)
+    case 'name':
+      return sorted.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+    default:
+      return sorted.sort((a, b) => b.totalScore - a.totalScore)
+  }
 })
 
 const selected = computed<Recommendation | null>(() => {
@@ -56,6 +109,11 @@ const newsList = computed<NewsAnalysis[]>(() => {
   const all = analysis.report?.news ?? []
   if (newsFilter.value === 'all') return all
   return all.filter((item) => item.sentiment === newsFilter.value)
+})
+
+const weightsText = computed(() => {
+  const percent = settings.weightPercent
+  return `趋势 ${percent.trend}% / 动量 ${percent.momentum}% / 量能 ${percent.volume}% / 区间 ${percent.position}% / 事件 ${percent.news}%`
 })
 
 function channelName(id: string): string {
@@ -73,19 +131,84 @@ const degraded = computed(() => {
   return { failed, simulated }
 })
 
+interface CompareRow {
+  symbol: string
+  name: string
+  scoreNow: number
+  scoreDelta: number | null
+  trendNow: TrendLabel
+  trendChanged: boolean
+  pctChangeNow: number
+  status: 'new' | 'existing'
+}
+
+const compareBaseline = computed<AnalysisSnapshot | null>(() => {
+  const explicit = snapshots.items.find((item) => item.id === compareId.value)
+  return explicit ?? snapshots.previous
+})
+
+const compareRows = computed<CompareRow[]>(() => {
+  const baseline = compareBaseline.value
+  if (!baseline || !report.value) return []
+  const previous = new Map(baseline.items.map((item) => [item.symbol, item]))
+  return report.value.recommendations.slice(0, 12).map((item) => {
+    const old = previous.get(item.symbol)
+    return {
+      symbol: item.symbol,
+      name: item.name,
+      scoreNow: item.totalScore,
+      scoreDelta: old ? Math.round((item.totalScore - old.totalScore) * 10) / 10 : null,
+      trendNow: item.trend.label,
+      trendChanged: Boolean(old && old.trend !== item.trend.label),
+      pctChangeNow: item.indicators.pctChange1d,
+      status: old ? 'existing' : 'new',
+    }
+  })
+})
+
+const removedCount = computed(() => {
+  const baseline = compareBaseline.value
+  if (!baseline || !report.value) return 0
+  const current = new Set(report.value.recommendations.map((item) => item.symbol))
+  return baseline.items.filter((item) => !current.has(item.symbol)).length
+})
+
 function selectSymbol(symbol: string): void {
   selectedSymbol.value = symbol
 }
 
-async function run(): Promise<void> {
-  await analysis.run()
-  if (!analysis.error) selectedSymbol.value = analysis.report?.recommendations[0]?.symbol ?? ''
+function resetFilters(): void {
+  sectorFilter.value = ''
+  trendFilter.value = 'all'
+  stageFilter.value = 'all'
+  minScore.value = 0
+  maxScore.value = 100
+  keyword.value = ''
+}
+
+function run(): void {
+  void analysis.run().then(() => {
+    if (analysis.error) return
+    selectedSymbol.value = analysis.report?.recommendations[0]?.symbol ?? ''
+    if (analysis.report) snapshots.capture(analysis.report)
+  })
 }
 
 onMounted(async () => {
+  watchlist.init()
+  settings.init()
+  snapshots.init()
   await analysis.ensureReport()
   selectedSymbol.value = analysis.report?.recommendations[0]?.symbol ?? ''
+  if (analysis.report) snapshots.capture(analysis.report)
 })
+
+watch(
+  () => analysis.report?.generatedAt,
+  (generatedAt) => {
+    if (generatedAt) snapshots.capture(analysis.report!)
+  },
+)
 </script>
 
 <template>
@@ -94,13 +217,17 @@ onMounted(async () => {
       <div>
         <h1>分析结果</h1>
         <p>
-          推荐列表由「趋势结构 40% + 动量 15% + 量能 15% + 区间位置 15% + 事件驱动 15%」加权得出，
-          所有结论均可下钻查看计算依据。
+          推荐列表按「{{ weightsText }}」加权得出，权重可在「数据源配置」页调整；所有结论均可下钻查看计算依据。
         </p>
       </div>
       <div class="page-head-actions">
         <span class="chip">{{ trading.latestTradingDay }} · {{ trading.phaseLabel }}</span>
         <span v-if="report" class="muted">生成于 {{ formatDateTime(report.generatedAt) }}</span>
+        <div class="filter-group">
+          <button class="btn btn-mini" :disabled="!report" @click="report && exportRecommendationsCsv(report)">导出 CSV</button>
+          <button class="btn btn-mini" :disabled="!report" @click="report && exportRecommendationsJson(report)">导出 JSON</button>
+          <button class="btn btn-mini" :disabled="!report" @click="report && exportReportMarkdown(report)">导出 Markdown</button>
+        </div>
         <button class="btn btn-primary" :disabled="analysis.loading" @click="run">
           {{ analysis.loading ? '分析中…' : '重新分析' }}
         </button>
@@ -175,6 +302,34 @@ onMounted(async () => {
             <h2>候选推荐</h2>
             <input v-model="keyword" class="search-input" type="search" placeholder="搜索名称 / 代码 / 行业" />
           </header>
+          <div class="filter-bar">
+            <select v-model="sectorFilter" class="select-input" aria-label="按行业筛选">
+              <option value="">全部行业</option>
+              <option v-for="sector in sectorOptions" :key="sector" :value="sector">{{ sector }}</option>
+            </select>
+            <select v-model="trendFilter" class="select-input" aria-label="按趋势筛选">
+              <option value="all">全部趋势</option>
+              <option v-for="[value, meta] in trendOptions" :key="value" :value="value">{{ meta.text }}</option>
+            </select>
+            <select v-model="stageFilter" class="select-input" aria-label="按事件阶段筛选">
+              <option value="all">全部事件阶段</option>
+              <option v-for="[value, meta] in stageOptions" :key="value" :value="value">{{ meta.text }}</option>
+            </select>
+            <label class="inline-label">
+              评分
+              <input v-model.number="minScore" class="range-input" type="number" min="0" max="100" aria-label="最低评分" />
+              -
+              <input v-model.number="maxScore" class="range-input" type="number" min="0" max="100" aria-label="最高评分" />
+            </label>
+            <select v-model="sortBy" class="select-input" aria-label="排序方式">
+              <option value="score">按评分</option>
+              <option value="change">按当日涨跌</option>
+              <option value="volume">按量比</option>
+              <option value="name">按名称</option>
+            </select>
+            <button class="btn btn-mini" @click="resetFilters">重置</button>
+          </div>
+          <p class="muted filter-summary">显示 {{ filtered.length }} / {{ report.recommendations.length }} 只</p>
           <RecommendationTable :items="filtered" :selected-symbol="selected?.symbol" @select="selectSymbol" />
         </div>
 
@@ -197,7 +352,10 @@ onMounted(async () => {
                 {{ formatPercent(selected.indicators.pctChange1d) }} · 5 日 {{ formatPercent(selected.indicators.pctChange5d) }}
               </p>
             </div>
-            <Sparkline :bars="selected.bars" :width="140" :height="42" />
+          </div>
+
+          <div class="detail-chart">
+            <KlineChart :bars="selected.bars" />
           </div>
 
           <div class="indicator-grid">
@@ -246,6 +404,46 @@ onMounted(async () => {
         </aside>
       </div>
 
+      <div v-if="snapshots.items.length > 0" class="card snapshot-compare">
+        <header class="card-head">
+          <h2>历史快照对比</h2>
+          <div class="card-head-actions">
+            <select v-model="compareId" class="select-input" aria-label="选择对比快照">
+              <option value="">上一次分析</option>
+              <option v-for="snapshot in snapshots.items" :key="snapshot.id" :value="snapshot.id">
+                {{ formatDateTime(snapshot.generatedAt) }}（{{ snapshot.items.length }} 只）
+              </option>
+            </select>
+            <button class="btn btn-mini" @click="snapshots.clear()">清空历史</button>
+          </div>
+        </header>
+        <p v-if="compareBaseline" class="muted">
+          对比基准：{{ formatDateTime(compareBaseline.generatedAt) }} · 平均涨跌 {{ formatPercent(compareBaseline.avgPctChange) }}
+          · 事件 {{ compareBaseline.newsCount }} 条 · 本次移出 {{ removedCount }} 只
+        </p>
+        <table v-if="compareRows.length > 0" class="snapshot-table">
+          <thead>
+            <tr><th>股票</th><th>评分</th><th>评分变化</th><th>趋势</th><th>当日涨跌</th><th>状态</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in compareRows" :key="row.symbol">
+              <td>{{ row.name }} <span class="muted">{{ row.symbol }}</span></td>
+              <td>{{ row.scoreNow.toFixed(1) }}</td>
+              <td :class="row.scoreDelta === null ? 'muted' : row.scoreDelta >= 0 ? 'text-up' : 'text-down'">
+                {{ row.scoreDelta === null ? '—' : `${row.scoreDelta >= 0 ? '+' : ''}${row.scoreDelta.toFixed(1)}` }}
+              </td>
+              <td>
+                {{ trendLabels[row.trendNow].text }}
+                <span v-if="row.trendChanged" class="tag tag-key">变化</span>
+              </td>
+              <td :class="row.pctChangeNow >= 0 ? 'text-up' : 'text-down'">{{ formatPercent(row.pctChangeNow) }}</td>
+              <td>{{ row.status === 'new' ? '新进' : '在池' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else class="muted">暂无更早快照可对比，下一次重新分析后即可看到评分与趋势变化。</p>
+      </div>
+
       <div class="card">
         <header class="card-head">
           <h2>新闻事件时间线</h2>
@@ -262,6 +460,8 @@ onMounted(async () => {
           · 建议：{{ Object.values(adviceLabels).map((item) => item.text).join(' / ') }}
         </p>
       </div>
+
+      <p class="disclaimer">{{ DISCLAIMER }}</p>
     </template>
   </section>
 </template>
