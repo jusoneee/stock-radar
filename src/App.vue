@@ -5,6 +5,7 @@ import { useChannelsStore } from '@/stores/channels'
 import { useAnalysisStore } from '@/stores/analysis'
 import { useWatchlistStore } from '@/stores/watchlist'
 import { getTradingStatus } from '@/lib/trading-calendar'
+import { COMPLIANCE_VERSION } from '@/lib/compliance'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +18,7 @@ const navItems = [
   { to: '/watchlist', label: '自选池' },
   { to: '/channels', label: '数据源配置' },
   { to: '/analysis', label: '分析结果' },
+  { to: '/legal/sources', label: '合规与数据来源' },
 ]
 
 const status = ref(getTradingStatus())
@@ -83,6 +85,12 @@ async function runAnalysis(): Promise<void> {
       </p>
       <p>
         请遵守各数据提供方的服务条款并控制请求频率；请勿在仓库或前端代码中硬编码密钥。
+      </p>
+      <p class="footer-links">
+        <RouterLink to="/legal/terms">使用条款</RouterLink>
+        <RouterLink to="/legal/privacy">隐私说明</RouterLink>
+        <RouterLink to="/legal/sources">数据来源</RouterLink>
+        <span class="muted">合规文案 v{{ COMPLIANCE_VERSION }}</span>
       </p>
     </footer>
   </div>
