@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useChannelsStore } from '@/stores/channels'
-import { STOCK_UNIVERSE } from '@/adapters/mock/universe'
+import { useWatchlistStore } from '@/stores/watchlist'
 import ChannelCard from '@/components/ChannelCard.vue'
 import type { ChannelMeta } from '@/types'
 
 const store = useChannelsStore()
+const watchlist = useWatchlistStore()
 
 interface ChannelView {
   meta: ChannelMeta
@@ -138,22 +140,14 @@ function onCacheTtl(event: Event): void {
 
     <div class="card">
       <header class="card-head">
-        <h2>股票池 <span class="muted">已选 {{ store.symbols.length }} 只</span></h2>
-        <span class="tag">演示池，可通过适配器替换为真实全市场列表</span>
+        <h2>自选池 <span class="muted">已选 {{ watchlist.count }} 只</span></h2>
+        <RouterLink to="/watchlist" class="btn btn-mini">前往管理</RouterLink>
       </header>
-      <div class="pool-chips">
-        <button
-          v-for="stock in STOCK_UNIVERSE"
-          :key="stock.symbol"
-          type="button"
-          class="pool-chip"
-          :class="{ 'is-on': store.symbols.includes(stock.symbol) }"
-          @click="store.toggleSymbol(stock.symbol)"
-        >
-          {{ stock.name }} <em>{{ stock.sector }}</em>
-        </button>
-      </div>
-    <p class="hint-text">
+      <p class="hint-text">
+        自选池已独立为「自选池」页面：支持按代码/名称搜索全市场、单个删除、清空、恢复默认，
+        最多 50 只并持久化到浏览器本地；分析页与分析引擎只读取该池。
+      </p>
+      <p class="hint-text">
         权重在同类型渠道内归一化（例如两个行情源权重 0.9 / 0.8 → 实际占比 53% / 47%）。
         主行情序列取权重最高的渠道，其余渠道用于多源收盘价交叉校验。
       </p>

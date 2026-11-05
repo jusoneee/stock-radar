@@ -1,18 +1,38 @@
 <script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useChannelsStore } from '@/stores/channels'
 import { useAnalysisStore } from '@/stores/analysis'
+import { useWatchlistStore } from '@/stores/watchlist'
+import { getTradingStatus } from '@/lib/trading-calendar'
 
 const route = useRoute()
 const router = useRouter()
 const channels = useChannelsStore()
 const analysis = useAnalysisStore()
+const watchlist = useWatchlistStore()
 
 const navItems = [
   { to: '/', label: '仪表盘' },
+  { to: '/watchlist', label: '自选池' },
   { to: '/channels', label: '数据源配置' },
   { to: '/analysis', label: '分析结果' },
 ]
+
+const status = ref(getTradingStatus())
+let timer: number | undefined
+
+onMounted(() => {
+  timer = window.setInterval(() => {
+    status.value = getTradingStatus()
+  }, 60_000)
+})
+
+onUnmounted(() => {
+  if (timer !== undefined) window.clearInterval(timer)
+})
+
+const marketChip = computed(() => `${status.value.latestTradingDay} · ${status.value.phaseLabel}`)
 
 async function runAnalysis(): Promise<void> {
   await analysis.run()
@@ -44,7 +64,8 @@ async function runAnalysis(): Promise<void> {
         </RouterLink>
       </nav>
       <div class="header-actions">
-        <span class="chip">已启用 {{ channels.enabledCount }} 个渠道</span>
+        <span class="chip">{{ marketChip }}</span>
+        <span class="chip">自选 {{ watchlist.count }} · 渠道 {{ channels.enabledCount }}</span>
         <button class="btn btn-primary" :disabled="analysis.loading" @click="runAnalysis">
           {{ analysis.loading ? '分析中…' : '运行分析' }}
         </button>
@@ -57,10 +78,11 @@ async function runAnalysis(): Promise<void> {
 
     <footer class="app-footer">
       <p>
-        本工具仅做信息聚合与逻辑演示，所有数据均为本地生成的模拟数据，<strong>不构成任何投资建议</strong>。
+        行情与资讯来自第三方公开接口，可能存在延迟、限流或字段变动；所有评分与「操作参考」均为规则化分析结论，
+        <strong>不构成任何投资建议</strong>。
       </p>
       <p>
-        接入真实数据源需自行申请并配置密钥，请遵守各数据提供方的服务条款；请勿在仓库或前端代码中硬编码密钥。
+        请遵守各数据提供方的服务条款并控制请求频率；请勿在仓库或前端代码中硬编码密钥。
       </p>
     </footer>
   </div>

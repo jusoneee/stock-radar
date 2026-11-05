@@ -10,6 +10,12 @@ const router = createRouter({
       meta: { title: '仪表盘' },
     },
     {
+      path: '/watchlist',
+      name: 'watchlist',
+      component: () => import('@/views/WatchlistView.vue'),
+      meta: { title: '自选池' },
+    },
+    {
       path: '/channels',
       name: 'channels',
       component: () => import('@/views/ChannelsView.vue'),

@@ -1,14 +1,25 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useChannelsStore } from '@/stores/channels'
 import { useAnalysisStore } from '@/stores/analysis'
-import { STOCK_UNIVERSE } from '@/adapters/mock/universe'
+import { useWatchlistStore } from '@/stores/watchlist'
+import { useUniverseStore } from '@/stores/universe'
+import { getTradingStatus } from '@/lib/trading-calendar'
+import { formatDateTime } from '@/lib/format'
 import StatTile from '@/components/StatTile.vue'
 
 const router = useRouter()
 const channels = useChannelsStore()
 const analysis = useAnalysisStore()
+const watchlist = useWatchlistStore()
+const universe = useUniverseStore()
+
+const trading = getTradingStatus()
+const universeFreshness = computed(() => {
+  if (!universe.fetchedAt) return '尚未加载全市场列表'
+  return `${formatDateTime(universe.fetchedAt)} 更新`
+})
 
 const pipeline = [
   { step: '01', title: '渠道选择', desc: '按行情源 / 新闻源分类，开关渠道并设置权重，配置持久化到本地。' },
@@ -46,7 +57,7 @@ const quoteChannelCount = computed(() => channels.quoteCatalog.length)
   <section class="page">
     <div class="hero card">
       <div class="hero-copy">
-        <span class="eyebrow">FRAMEWORK EDITION · 模拟数据</span>
+        <span class="eyebrow">LIVE PUBLIC DATA · 自选池驱动</span>
         <h1>把「行情趋势」和「新闻事件」放在同一张雷达图上</h1>
         <p>
           选择你信任的信息渠道，Stock Radar 会并行拉取行情与新闻，先判断个股处于什么趋势，再推断事件处于
@@ -62,7 +73,8 @@ const quoteChannelCount = computed(() => channels.quoteCatalog.length)
         <dl>
           <div><dt>行情渠道</dt><dd>{{ channels.quoteSettings.length }} / {{ quoteChannelCount }}</dd></div>
           <div><dt>新闻渠道</dt><dd>{{ channels.newsSettings.length }} / {{ newsChannelCount }}</dd></div>
-          <div><dt>股票池</dt><dd>{{ channels.symbols.length }} 只</dd></div>
+          <div><dt>自选池</dt><dd>{{ watchlist.count }} 只</dd></div>
+          <div><dt>市场状态</dt><dd>{{ trading.latestTradingDay }} · {{ trading.phaseLabel }}</dd></div>
           <div><dt>最近分析</dt><dd>{{ analysis.report ? '已生成' : '尚未运行' }}</dd></div>
         </dl>
         <button class="btn btn-secondary full" :disabled="analysis.loading" @click="analysis.run()">
@@ -74,7 +86,7 @@ const quoteChannelCount = computed(() => channels.quoteCatalog.length)
 
     <div class="stat-grid">
       <StatTile label="启用渠道" :value="channels.enabledCount" hint="可在数据源页随时调整" tone="neutral" />
-      <StatTile label="覆盖标的" :value="channels.symbols.length" hint="演示用 A 股池" tone="neutral" />
+      <StatTile label="覆盖标的" :value="watchlist.count" hint="自选池（最多 50 只）" tone="neutral" />
       <StatTile
         label="最高评分"
         :value="analysis.report ? analysis.topScore.toFixed(1) : '—'"
@@ -117,22 +129,35 @@ const quoteChannelCount = computed(() => channels.quoteCatalog.length)
 
     <div class="card">
       <header class="card-head">
-        <h2>演示股票池</h2>
-        <span class="tag">{{ STOCK_UNIVERSE.length }} 只 · 模拟</span>
+        <h2>自选池</h2>
+        <div class="card-head-actions">
+          <span class="tag">{{ watchlist.count }} 只 · 本地持久化</span>
+          <RouterLink to="/watchlist" class="btn btn-mini">管理自选池</RouterLink>
+        </div>
       </header>
-      <div class="stock-pool">
-        <div v-for="stock in STOCK_UNIVERSE" :key="stock.symbol" class="pool-item">
+      <div v-if="watchlist.isEmpty" class="empty-state compact">
+        <h3>自选池为空</h3>
+        <p>到「自选池」页面搜索全市场并添加标的，或恢复默认的 10 只演示股票。</p>
+        <RouterLink to="/watchlist" class="btn btn-primary">去添加股票</RouterLink>
+      </div>
+      <div v-else class="stock-pool">
+        <div v-for="stock in watchlist.items" :key="stock.symbol" class="pool-item">
           <strong>{{ stock.name }}</strong>
-          <span>{{ stock.symbol }} · {{ stock.sector }}</span>
+          <span>{{ stock.symbol }} · {{ stock.market === 'SH' ? '沪市' : '深市' }}</span>
         </div>
       </div>
+      <p class="hint-text">
+        全市场列表：{{ universe.count ? `${universe.count} 只` : '未加载' }} · {{ universeFreshness }}
+        <template v-if="universe.isStale && universe.count">（缓存已过期，进入自选池页可刷新）</template>
+      </p>
     </div>
 
     <div class="notice">
       <strong>合规声明</strong>
       <p>
-        本项目为产品框架与算法演示，所有行情、新闻与评分均由本地模拟数据生成，不构成投资建议。
-        接入真实数据前，请确认数据源授权范围，并遵守《证券法》及交易所信息披露相关规定。
+        行情与资讯来自东方财富、腾讯证券、新浪财经等公开接口，可能存在延迟、限流或字段变更；
+        评分与时机参考均为规则化分析结论，<strong>不构成投资建议</strong>。
+        请确认数据源授权范围，并遵守《证券法》及交易所信息披露相关规定。
       </p>
     </div>
   </section>

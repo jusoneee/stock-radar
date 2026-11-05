@@ -1284,6 +1284,188 @@ a {
   padding: 12px 0;
 }
 
+/* ----- watchlist ----- */
+.freshness-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  font-size: 12px;
+}
+
+.freshness-spacer {
+  flex: 1;
+  min-width: 8px;
+}
+
+.history-link {
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.history-link:hover {
+  color: var(--text);
+}
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 240px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: rgba(79, 140, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.12);
+}
+
+.search-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.progress-block {
+  display: grid;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+
+.progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.progress-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #4f8cff, #6c6cff);
+  transition: width 0.25s ease;
+}
+
+.result-list {
+  display: grid;
+  gap: 6px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.result-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.result-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.result-main strong {
+  font-size: 13px;
+}
+
+.result-main .muted {
+  font-size: 11px;
+}
+
+.result-quote {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.pool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.pool-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.pool-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pool-card-main strong {
+  font-size: 13px;
+}
+
+.pool-card-main .muted {
+  font-size: 11px;
+}
+
+.pool-remove {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.pool-remove:hover {
+  color: #fff;
+  background: rgba(255, 90, 90, 0.18);
+}
+
+.empty-state.compact {
+  padding: 26px 16px;
+}
+
+.empty-state.compact h3 {
+  font-size: 15px;
+}
+
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.error-retry {
+  margin-left: 10px;
+}
+
 /* ----- responsive ----- */
 @media (max-width: 1100px) {
   .hero,
