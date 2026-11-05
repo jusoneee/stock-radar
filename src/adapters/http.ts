@@ -46,8 +46,15 @@ function describe(status: number, url: string): string {
   return `接口返回 HTTP ${status}（${url}）`
 }
 
-async function request(url: string, options: RequestOptions, accept: 'json' | 'text', encoding?: string): Promise<unknown> {
-  const cached = cacheGet(url)
+async function request(
+  url: string,
+  options: RequestOptions,
+  accept: 'json' | 'text',
+  encoding?: string,
+  init?: RequestInit,
+): Promise<unknown> {
+  const cacheKey = init?.body ? `${url}#${String(init.body)}` : url
+  const cached = cacheGet(cacheKey)
   if (cached !== undefined) return cached
 
   let lastError: AdapterError | undefined
@@ -58,9 +65,11 @@ async function request(url: string, options: RequestOptions, accept: 'json' | 't
     const timer = setTimeout(() => controller.abort(), options.timeoutMs)
     try {
       const response = await fetch(url, {
+        ...init,
         signal: controller.signal,
         headers: {
           Accept: accept === 'json' ? 'application/json, text/plain, */*' : 'text/plain, */*',
+          ...(init?.headers as Record<string, string> | undefined),
           ...options.headers,
         },
       })
@@ -76,7 +85,7 @@ async function request(url: string, options: RequestOptions, accept: 'json' | 't
       } else {
         value = await response.text()
       }
-      cacheSet(url, value, options.cacheTtlMs)
+      cacheSet(cacheKey, value, options.cacheTtlMs)
       return value
     } catch (error) {
       if (error instanceof AdapterError) {
@@ -113,6 +122,25 @@ export async function fetchText(
   headers?: Record<string, string>,
 ): Promise<string> {
   return (await request(url, { ...ctx, headers }, 'text', encoding)) as string
+}
+
+/** JSON POST helper used by token-protected providers such as Tushare. */
+export async function fetchJsonPost<T>(
+  url: string,
+  body: unknown,
+  ctx: AdapterContext,
+  headers?: Record<string, string>,
+): Promise<T> {
+  try {
+    return (await request(url, { ...ctx, headers }, 'json', undefined, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })) as T
+  } catch (error) {
+    if (error instanceof AdapterError) throw error
+    throw new AdapterError('PARSE', `响应解析失败：${url}`)
+  }
 }
 
 /** Clear the response cache, e.g. when the user explicitly re-runs the analysis. */

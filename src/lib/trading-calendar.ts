@@ -203,3 +203,38 @@ export function nextTradingSessionStart(now: Date = new Date()): Date {
   // Fallback: 24 hours from now; the cache layer will retry on the next visit.
   return new Date(now.getTime() + 86_400_000)
 }
+
+/**
+ * First trading day strictly after the Beijing date of `now`, or including
+ * today when `includeToday` is true and today is a trading day.
+ */
+export function nextTradingDay(now: Date = new Date(), includeToday = false): string {
+  const { year, month, day } = beijingParts(now)
+  let cursor = Date.UTC(year, month - 1, day)
+  if (!includeToday) cursor += 86_400_000
+
+  for (let step = 0; step <= 45; step += 1) {
+    const candidate = new Date(cursor)
+    const y = candidate.getUTCFullYear()
+    const m = candidate.getUTCMonth() + 1
+    const d = candidate.getUTCDate()
+    if (isTradingDay(y, m, d)) return toDateKey(y, m, d)
+    cursor += 86_400_000
+  }
+  return toDateKey(year, month, day)
+}
+
+/**
+ * First trading day an event can influence. News published on a weekend / holiday
+ * or after the 15:00 close is mapped to the next trading session so event stages
+ * and observation windows line up with actual price action.
+ */
+export function effectiveTradingDay(publishedAt: string): string {
+  const date = new Date(publishedAt)
+  if (!Number.isFinite(date.getTime())) return latestTradingDay()
+  const { year, month, day, hour, minute } = beijingParts(date)
+  const trading = isTradingDay(year, month, day)
+  const afterClose = hour * 60 + minute > 900
+  if (!trading || afterClose) return nextTradingDay(date, false)
+  return toDateKey(year, month, day)
+}

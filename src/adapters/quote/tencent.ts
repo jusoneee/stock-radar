@@ -2,6 +2,7 @@ import type { ChannelMeta, QuoteBar, QuoteSnapshot } from '@/types'
 import { AdapterError, type AdapterContext, type QuoteAdapter } from '@/adapters/types'
 import { fetchJson, fetchText } from '@/adapters/http'
 import { findProfile } from '@/adapters/mock/universe'
+import { marketPrefix } from '@/lib/market'
 import { mapWithConcurrency } from '@/lib/concurrency'
 
 /**
@@ -37,7 +38,7 @@ interface TencentKlineResponse {
 }
 
 function toMarketSymbol(symbol: string): string {
-  return `${symbol.startsWith('6') ? 'sh' : 'sz'}${symbol}`
+  return `${marketPrefix(symbol)}${symbol}`
 }
 
 /** Tencent kline rows: [date, open, close, high, low, volume]. */

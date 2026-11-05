@@ -131,6 +131,14 @@ export interface NewsAnalysis {
   adviceReason: string
   /** Suggested observation window in trading days. */
   impactWindow: number
+  /** Hours between publication and the analysis run. */
+  ageHours: number
+  /** Old or repeatedly recycled coverage; down-weighted in scoring. */
+  stale: boolean
+  /** Number of near-duplicate headlines clustered into this event. */
+  duplicateCount: number
+  /** First trading day the event can affect (weekend/holiday aware). */
+  effectiveTradingDay: string
 }
 
 export interface Recommendation {
@@ -160,17 +168,25 @@ export interface MarketSummary {
   negativeNews: number
 }
 
+export type MarketPrefix = 'SH' | 'SZ' | 'BJ'
+
 /** One A-share symbol from the full market list. */
 export interface UniverseStock {
   symbol: string
   name: string
-  market: 'SH' | 'SZ'
+  market: MarketPrefix
+  /** Industry classification reported by the list endpoint. */
+  sector?: string
   /** Latest price reported by the list endpoint, if present. */
   price?: number
   /** Latest daily change in percent, if present. */
   pctChange?: number
   /** Provider quote timestamp (ISO string), used for freshness hints. */
   quoteTime?: string
+  /** Name carries an ST / *ST prefix. */
+  st?: boolean
+  /** The provider reports no price for this symbol (suspended or delisted). */
+  suspended?: boolean
 }
 
 /** localStorage payload of the cached full market list. */
@@ -186,8 +202,27 @@ export interface UniverseCachePayload {
 export interface WatchItem {
   symbol: string
   name: string
-  market?: 'SH' | 'SZ'
+  market?: MarketPrefix
+  /** Free-form user group, empty means the default group. */
+  group?: string
   addedAt?: string
+}
+
+/** Score weights used by the multi-factor model; all values are normalized at runtime. */
+export interface ScoreWeights {
+  trend: number
+  momentum: number
+  volume: number
+  position: number
+  news: number
+}
+
+/** Lightweight stock profile shared from the universe list into the engine. */
+export interface StockProfileLite {
+  name?: string
+  sector?: string
+  st?: boolean
+  suspended?: boolean
 }
 
 export interface ChannelRunResult {
@@ -221,4 +256,25 @@ export interface AdapterSettings {
   retryCount: number
   /** In-memory response cache TTL, in milliseconds. 0 disables caching. */
   cacheTtlMs: number
+  /** Optional universe metadata (industry, ST, suspension) keyed by symbol. */
+  profiles?: Record<string, StockProfileLite>
+}
+
+/** Trimmed analysis result kept in local storage for history comparison. */
+export interface SnapshotItem {
+  symbol: string
+  name: string
+  sector: string
+  totalScore: number
+  trend: TrendLabel
+  lastClose: number
+  pctChange1d: number
+}
+
+export interface AnalysisSnapshot {
+  id: string
+  generatedAt: string
+  items: SnapshotItem[]
+  avgPctChange: number
+  newsCount: number
 }
