@@ -40,6 +40,10 @@ const range = ref<60 | 120>(60)
 const profileChecked = ref(false)
 
 const displayName = computed(() => snapshot.value?.name || hintName.value || symbol.value)
+const isFavorite = computed(() => {
+  const entry = watchlist.items.find((item) => item.symbol === symbol.value)
+  return Boolean(entry && entry.favorite !== false)
+})
 
 const metrics = computed(() => {
   const bars = snapshot.value?.bars ?? []
@@ -146,6 +150,14 @@ watch(symbol, load)
       <div class="page-head-actions">
         <button class="btn btn-ghost" @click="toggleWatch">
           {{ watchlist.has(symbol) ? '移出自选' : '加入自选' }}
+        </button>
+        <button
+          v-if="watchlist.has(symbol)"
+          class="btn btn-ghost"
+          :aria-pressed="isFavorite"
+          @click="watchlist.toggleFavorite(symbol)"
+        >
+          {{ isFavorite ? '★ 已收藏' : '☆ 收藏' }}
         </button>
         <button class="btn btn-ghost" :class="{ 'is-active': compare.has(symbol) }" @click="compare.toggle(symbol)">
           {{ compare.has(symbol) ? '移出对比' : '加入对比' }}

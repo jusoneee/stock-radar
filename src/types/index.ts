@@ -205,6 +205,11 @@ export interface WatchItem {
   market?: MarketPrefix
   /** Free-form user group, empty means the default group. */
   group?: string
+  /**
+   * Favourite flag. Items saved before this field existed are migrated to
+   * `true` so the user's existing pool keeps its "collected" meaning.
+   */
+  favorite?: boolean
   addedAt?: string
 }
 
