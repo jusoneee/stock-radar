@@ -1,5 +1,6 @@
 import type { AnalysisReport, NewsAnalysis, Recommendation } from '@/types'
 import { adviceLabels, eventTypeLabels, sentimentLabels, stageLabels, trendLabels } from '@/lib/labels'
+import { formatPercent, formatPrice } from '@/lib/format'
 
 export const DISCLAIMER =
   '本报告由 stock-radar 基于公开行情与公开资讯自动生成，仅用于研究与学习，不构成任何投资建议或买卖要约。'
@@ -60,14 +61,14 @@ export function exportRecommendationsCsv(report: AnalysisReport): void {
     item.sector,
     item.totalScore.toFixed(1),
     trendText(item),
-    item.indicators.lastClose,
-    item.indicators.pctChange1d,
-    item.indicators.pctChange5d,
+    formatPrice(item.indicators.lastClose),
+    formatPercent(item.indicators.pctChange1d),
+    formatPercent(item.indicators.pctChange5d),
     item.indicators.volumeRatio,
     (item.indicators.rangePosition * 100).toFixed(0),
-    item.indicators.ma5,
-    item.indicators.ma10,
-    item.indicators.ma20,
+    formatPrice(item.indicators.ma5),
+    formatPrice(item.indicators.ma10),
+    formatPrice(item.indicators.ma20),
     item.news.length,
     item.sourceIds.length,
     item.riskFlags.join('；'),
@@ -140,7 +141,7 @@ export function exportReportMarkdown(report: AnalysisReport): void {
   lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
   for (const item of report.recommendations) {
     lines.push(
-      `| ${item.symbol} | ${item.name} | ${item.sector} | ${item.totalScore.toFixed(1)} | ${trendText(item)} | ${item.indicators.lastClose} | ${item.indicators.pctChange1d}% | ${item.indicators.volumeRatio} | ${item.riskFlags.join('；') || '—'} |`,
+      `| ${item.symbol} | ${item.name} | ${item.sector} | ${item.totalScore.toFixed(1)} | ${trendText(item)} | ${formatPrice(item.indicators.lastClose)} | ${formatPercent(item.indicators.pctChange1d)} | ${item.indicators.volumeRatio} | ${item.riskFlags.join('；') || '—'} |`,
     )
   }
   lines.push('')

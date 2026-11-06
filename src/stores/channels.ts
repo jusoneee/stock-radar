@@ -70,6 +70,18 @@ export const useChannelsStore = defineStore('channels', {
       })
       return normalize(enabled.map((channel) => ({ id: channel.id, weight: channel.weight })))
     },
+    /** Enabled built-in quote channels without normalization, for merging with custom sources. */
+    rawQuoteWeights(state): Array<{ id: string; weight: number }> {
+      return state.channels
+        .filter((channel) => channel.enabled && CHANNEL_CATALOG.find((item) => item.id === channel.id)?.kind === 'quote')
+        .map((channel) => ({ id: channel.id, weight: channel.weight }))
+    },
+    /** Enabled built-in news channels without normalization, for merging with custom sources. */
+    rawNewsWeights(state): Array<{ id: string; weight: number }> {
+      return state.channels
+        .filter((channel) => channel.enabled && CHANNEL_CATALOG.find((item) => item.id === channel.id)?.kind === 'news')
+        .map((channel) => ({ id: channel.id, weight: channel.weight }))
+    },
   },
   actions: {
     buildSettings(symbols: string[], profiles?: Record<string, StockProfileLite>): AdapterSettings {

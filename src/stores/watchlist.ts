@@ -26,6 +26,7 @@ function defaultItems(): WatchItem[] {
     symbol: stock.symbol,
     name: stock.name,
     market: marketOf(stock.symbol),
+    favorite: true,
     addedAt: 'default',
   }))
 }
@@ -41,7 +42,7 @@ function readLegacySymbols(): WatchItem[] | null {
     for (const value of parsed.symbols) {
       if (typeof value !== 'string' || !isValidSymbol(value)) continue
       const profile = STOCK_UNIVERSE.find((stock) => stock.symbol === value)
-      items.push({ symbol: value, name: profile?.name ?? value, market: marketOf(value), addedAt: 'migrated' })
+      items.push({ symbol: value, name: profile?.name ?? value, market: marketOf(value), favorite: true, addedAt: 'migrated' })
     }
     return items.length > 0 ? items : null
   } catch {
@@ -61,6 +62,8 @@ export const useWatchlistStore = defineStore('watchlist', {
   getters: {
     count: (state): number => state.items.length,
     symbols: (state): string[] => state.items.map((item) => item.symbol),
+    favorites: (state): WatchItem[] => state.items.filter((item) => item.favorite !== false),
+    favoriteSymbols: (state): string[] => state.items.filter((item) => item.favorite !== false).map((item) => item.symbol),
     isEmpty: (state): boolean => state.items.length === 0,
     isFull: (state): boolean => state.items.length >= MAX_WATCHLIST,
     /** Distinct user groups, default group first. */
@@ -108,6 +111,7 @@ export const useWatchlistStore = defineStore('watchlist', {
                 ? candidate.market
                 : marketOf(candidate.symbol),
             group: typeof candidate.group === 'string' && candidate.group.trim() ? candidate.group.trim() : undefined,
+            favorite: candidate.favorite !== false,
             addedAt: candidate.addedAt,
           })
           if (items.length >= MAX_WATCHLIST) break
@@ -143,11 +147,18 @@ export const useWatchlistStore = defineStore('watchlist', {
         name: stock.name.trim() || symbol,
         market: stock.market ?? marketOf(symbol),
         group: stock.group?.trim() || undefined,
+        favorite: true,
         addedAt: new Date().toISOString(),
       })
       this.notice = ''
       this.persist()
       return 'added'
+    },
+    toggleFavorite(symbol: string): void {
+      const item = this.items.find((entry) => entry.symbol === symbol)
+      if (!item) return
+      item.favorite = item.favorite === false
+      this.persist()
     },
     remove(symbol: string): void {
       this.items = this.items.filter((item) => item.symbol !== symbol)

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { Recommendation } from '@/types'
 import { formatPercent, formatPrice } from '@/lib/format'
+import { marketOfSymbol } from '@/lib/market'
+import { RouterLink } from 'vue-router'
 import TrendBadge from './TrendBadge.vue'
 import Sparkline from './Sparkline.vue'
 
@@ -12,7 +14,7 @@ defineProps<{
 const emit = defineEmits<{ (event: 'select', symbol: string): void }>()
 
 function symbolText(symbol: string): string {
-  return symbol.startsWith('6') ? `SH${symbol}` : `SZ${symbol}`
+  return `${marketOfSymbol(symbol)}${symbol}`
 }
 </script>
 
@@ -43,6 +45,14 @@ function symbolText(symbol: string): string {
             <div class="stock-cell">
               <strong>{{ item.name }}</strong>
               <span>{{ symbolText(item.symbol) }} · {{ item.sector }}</span>
+              <RouterLink
+                :to="`/stock/${item.symbol}`"
+                class="stock-detail-link"
+                :aria-label="`查看 ${item.name} 的个股详情`"
+                @click.stop
+              >
+                详情
+              </RouterLink>
             </div>
           </td>
           <td class="num">{{ formatPrice(item.indicators.lastClose) }}</td>
@@ -66,3 +76,19 @@ function symbolText(symbol: string): string {
     </table>
   </div>
 </template>
+
+<style scoped>
+.stock-detail-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  margin-top: 2px;
+  color: #7fb6ff;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.stock-detail-link:hover {
+  text-decoration: underline;
+}
+</style>

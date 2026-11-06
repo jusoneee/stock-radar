@@ -58,7 +58,10 @@ async function request(
   if (cached !== undefined) return cached
 
   let lastError: AdapterError | undefined
-  const attempts = Math.max(1, options.retryCount + 1)
+  // Only safe, repeatable requests are retried: a user-defined POST may have side effects.
+  const method = (init?.method ?? 'GET').toUpperCase()
+  const canRetry = method === 'GET' || method === 'HEAD'
+  const attempts = canRetry ? Math.max(1, options.retryCount + 1) : 1
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const controller = new AbortController()

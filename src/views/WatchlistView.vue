@@ -3,6 +3,8 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { MAX_WATCHLIST, useWatchlistStore, type WatchSortMode } from '@/stores/watchlist'
 import { useUniverseStore } from '@/stores/universe'
+import { useCompareStore } from '@/stores/compare'
+import FavoritesPreview from '@/components/FavoritesPreview.vue'
 import { getTradingStatus } from '@/lib/trading-calendar'
 import { formatDateTime, formatPercent, formatPrice } from '@/lib/format'
 import { marketLabel, symbolText } from '@/lib/market'
@@ -10,11 +12,13 @@ import type { UniverseStock, WatchItem } from '@/types'
 
 const watchlist = useWatchlistStore()
 const universe = useUniverseStore()
+const compare = useCompareStore()
 
 const query = ref('')
 const feedback = ref('')
 const groupFilter = ref('')
 const groupInput = ref('')
+const onlyFavorites = ref(false)
 
 const trading = getTradingStatus()
 
@@ -49,15 +53,25 @@ const sortedItems = computed<WatchItem[]>(() => {
 })
 
 const poolItems = computed<WatchItem[]>(() => {
+  const base = onlyFavorites.value
+    ? sortedItems.value.filter((item) => item.favorite !== false)
+    : sortedItems.value
   const filter = groupFilter.value
-  if (!filter) return sortedItems.value
-  if (filter === '__default__') return sortedItems.value.filter((item) => !item.group)
-  return sortedItems.value.filter((item) => item.group === filter)
+  if (!filter) return base
+  if (filter === '__default__') return base.filter((item) => !item.group)
+  return base.filter((item) => item.group === filter)
 })
+
+const previewNames = computed<Record<string, string>>(() =>
+  Object.fromEntries(watchlist.items.map((item) => [item.symbol, item.name])),
+)
+
+const favoriteCount = computed(() => watchlist.favorites.length)
 
 onMounted(async () => {
   watchlist.init()
   universe.init()
+  compare.init()
   await universe.ensureLoaded()
 })
 
@@ -82,12 +96,18 @@ function applyGroup(symbol: string, event: Event): void {
 
 function restoreDefaults(): void {
   watchlist.reset()
-  feedback.value = '已恢复默认自选池（10 只）'
+  feedback.value = '已恢复默认自选池（10 只，全部标记为收藏）'
 }
 
 function clearPool(): void {
   watchlist.clear()
-  feedback.value = '已清空自选池'
+  compare.clear()
+  feedback.value = '已清空自选池与对比选择'
+}
+
+function togglePreview(symbol: string): void {
+  compare.toggle(symbol)
+  if (compare.notice) feedback.value = compare.notice
 }
 
 async function refreshUniverse(): Promise<void> {
@@ -121,6 +141,8 @@ async function loadUniverse(): Promise<void> {
         最近交易日 {{ trading.latestTradingDay }} · {{ trading.phaseLabel }}
       </span>
       <span class="tag">自选池 {{ watchlist.count }} / {{ MAX_WATCHLIST }}</span>
+      <span class="tag">收藏 {{ favoriteCount }}</span>
+      <span class="tag" :class="{ 'tag-live': compare.count >= 2 }">预览选择 {{ compare.count }} / 6</span>
       <span v-if="universe.status === 'ready'" class="tag tag-live">全市场 {{ universe.providerTotal || universe.count }} 只</span>
       <span v-if="universe.status === 'loading'" class="tag">分页抓取中 {{ universe.progress.loaded }} / {{ universe.progress.total }} 页</span>
       <span v-if="universe.fetchedAt" class="muted">列表更新时间 {{ formatDateTime(universe.fetchedAt) }}</span>
@@ -184,7 +206,7 @@ async function loadUniverse(): Promise<void> {
 
       <div v-else-if="!hasUniverse" class="empty-state compact">
         <h3>未加载全市场列表</h3>
-        <p>全市场列表需要一次分页抓取（约 56 页），失败时会明确提示，不会退回假数据。</p>
+        <p>全市场列表需要一次分页抓取（约 60 页），失败时会明确提示，不会退回假数据。</p>
         <button class="btn btn-primary" :disabled="universe.isLoading" @click="loadUniverse">加载全市场列表</button>
       </div>
 
@@ -225,6 +247,10 @@ async function loadUniverse(): Promise<void> {
         <h2>当前自选池 <span class="muted">{{ watchlist.count }} / {{ MAX_WATCHLIST }}</span></h2>
         <div class="card-head-actions">
           <label class="inline-label">
+            <input v-model="onlyFavorites" type="checkbox" />
+            只看收藏
+          </label>
+          <label class="inline-label">
             分组
             <select v-model="groupFilter" class="select-input">
               <option value="">全部</option>
@@ -259,10 +285,30 @@ async function loadUniverse(): Promise<void> {
       <div v-else class="pool-grid">
         <div v-for="(item, index) in poolItems" :key="item.symbol" class="pool-card">
           <div class="pool-card-main">
-            <strong>{{ item.name }}</strong>
+            <RouterLink :to="`/stock/${item.symbol}`" class="pool-name">{{ item.name }}</RouterLink>
             <span class="muted">{{ symbolText(item.symbol) }} · {{ marketLabel(item.market) }}</span>
           </div>
           <div class="pool-card-tools">
+            <button
+              class="pool-star"
+              type="button"
+              :class="{ 'is-favorite': item.favorite !== false }"
+              :aria-label="item.favorite !== false ? `取消收藏 ${item.name}` : `收藏 ${item.name}`"
+              :aria-pressed="item.favorite !== false"
+              @click="watchlist.toggleFavorite(item.symbol)"
+            >
+              {{ item.favorite !== false ? '★' : '☆' }}
+            </button>
+            <button
+              class="pool-compare"
+              type="button"
+              :class="{ 'is-active': compare.has(item.symbol) }"
+              :aria-label="compare.has(item.symbol) ? `取消预览 ${item.name}` : `加入预览 ${item.name}`"
+              :aria-pressed="compare.has(item.symbol)"
+              @click="togglePreview(item.symbol)"
+            >
+              {{ compare.has(item.symbol) ? '已选预览' : '预览' }}
+            </button>
             <input
               class="group-input"
               type="text"
@@ -295,8 +341,12 @@ async function loadUniverse(): Promise<void> {
             ×
           </button>
         </div>
-        <p v-if="poolItems.length === 0" class="empty-text">当前分组下没有股票。</p>
+        <p v-if="poolItems.length === 0" class="empty-text">
+          {{ onlyFavorites ? '当前筛选下没有收藏股票，试试取消「只看收藏」。' : '当前分组下没有股票。' }}
+        </p>
       </div>
+
+      <FavoritesPreview :symbols="compare.symbols" :names="previewNames" />
 
       <p v-if="watchlist.isFull" class="inline-warn">
         已达到 {{ MAX_WATCHLIST }} 只上限：批量取数按并发 3、间隔 120ms 串行调度，避免触发上游风控。
@@ -315,3 +365,58 @@ async function loadUniverse(): Promise<void> {
     </div>
   </section>
 </template>
+
+<style scoped>
+.pool-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: none;
+}
+
+.pool-name:hover {
+  color: #7fb6ff;
+}
+
+.pool-star,
+.pool-compare {
+  min-height: 44px;
+  min-width: 44px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.pool-star {
+  font-size: 18px;
+  color: #5b6472;
+}
+
+.pool-star.is-favorite {
+  color: #f5b544;
+}
+
+.pool-compare.is-active {
+  border-color: #2563eb;
+  color: #7fb6ff;
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.pool-card-tools {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .pool-card {
+    flex-wrap: wrap;
+  }
+
+  .pool-card-tools {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+</style>

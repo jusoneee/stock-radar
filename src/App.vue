@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useChannelsStore } from '@/stores/channels'
 import { useAnalysisStore } from '@/stores/analysis'
@@ -16,13 +16,22 @@ const watchlist = useWatchlistStore()
 const navItems = [
   { to: '/', label: '仪表盘' },
   { to: '/watchlist', label: '自选池' },
+  { to: '/compare', label: '多股对比' },
   { to: '/channels', label: '数据源配置' },
   { to: '/analysis', label: '分析结果' },
   { to: '/legal/sources', label: '合规与数据来源' },
 ]
 
 const status = ref(getTradingStatus())
+const menuOpen = ref(false)
 let timer: number | undefined
+
+watch(
+  () => route.path,
+  () => {
+    menuOpen.value = false
+  },
+)
 
 onMounted(() => {
   timer = window.setInterval(() => {
@@ -54,7 +63,7 @@ async function runAnalysis(): Promise<void> {
           <p class="brand-sub">A股行情 + 新闻事件 双引擎选股框架</p>
         </div>
       </div>
-      <nav class="nav">
+      <nav id="main-nav" class="nav" :class="{ 'is-open': menuOpen }">
         <RouterLink
           v-for="item in navItems"
           :key="item.to"
@@ -66,6 +75,16 @@ async function runAnalysis(): Promise<void> {
         </RouterLink>
       </nav>
       <div class="header-actions">
+        <button
+          class="nav-toggle"
+          type="button"
+          aria-controls="main-nav"
+          :aria-expanded="menuOpen"
+          aria-label="展开或收起导航菜单"
+          @click="menuOpen = !menuOpen"
+        >
+          {{ menuOpen ? '收起' : '菜单' }}
+        </button>
         <span class="chip">{{ marketChip }}</span>
         <span class="chip">自选 {{ watchlist.count }} · 渠道 {{ channels.enabledCount }}</span>
         <button class="btn btn-primary" :disabled="analysis.loading" @click="runAnalysis">

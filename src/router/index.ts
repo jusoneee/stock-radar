@@ -16,6 +16,18 @@ const router = createRouter({
       meta: { title: '自选池' },
     },
     {
+      path: '/compare',
+      name: 'compare',
+      component: () => import('@/views/CompareView.vue'),
+      meta: { title: '多股对比' },
+    },
+    {
+      path: '/stock/:symbol',
+      name: 'stock',
+      component: () => import('@/views/StockDetailView.vue'),
+      meta: { title: '个股详情' },
+    },
+    {
       path: '/channels',
       name: 'channels',
       component: () => import('@/views/ChannelsView.vue'),
@@ -32,6 +44,11 @@ const router = createRouter({
       name: 'legal',
       component: () => import('@/views/LegalView.vue'),
       meta: { title: '合规与数据来源' },
+    },
+    {
+      // Unknown hashes must not render a blank page.
+      path: '/:pathMatch(.*)*',
+      redirect: '/',
     },
   ],
 })

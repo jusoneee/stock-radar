@@ -191,6 +191,7 @@ a {
 .page-head-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -1652,6 +1653,23 @@ a {
 }
 
 /* ----- responsive ----- */
+/* Mobile navigation toggle: hidden on wide screens, shown in the 760px block. */
+.nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 @media (max-width: 1100px) {
   .hero,
   .grid-2,
@@ -1666,6 +1684,35 @@ a {
   .stat-grid,
   .pipeline {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Touch-friendly targets for phones and tablets (<=1024px). */
+@media (max-width: 1024px) {
+  .btn,
+  .btn-mini,
+  .nav-link,
+  .nav-toggle,
+  .pool-move,
+  .pool-remove,
+  .pool-star,
+  .pool-compare,
+  .search-input,
+  .select-input,
+  .group-input,
+  .pick-chip {
+    min-height: 44px;
+  }
+
+  .pool-star,
+  .pool-remove,
+  .pool-move {
+    min-width: 44px;
+  }
+
+  .footer-links a {
+    display: inline-block;
+    padding: 12px 4px;
   }
 }
 
@@ -1684,10 +1731,39 @@ a {
     order: 3;
     width: 100%;
     margin-left: 0;
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .nav.is-open {
+    display: flex;
+  }
+
+  .nav-toggle {
+    display: inline-flex;
   }
 
   .header-actions {
     margin-left: auto;
+    flex-wrap: wrap;
+  }
+
+  /* Touch-friendly targets on phones and small tablets. */
+  .btn,
+  .nav-link,
+  .nav-toggle,
+  .pool-move,
+  .pool-remove,
+  .pool-star,
+  .pool-compare {
+    min-height: 44px;
+  }
+
+  .pool-star,
+  .pool-remove,
+  .pool-move {
+    min-width: 44px;
   }
 
   .stat-grid,

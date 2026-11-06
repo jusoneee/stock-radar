@@ -6,7 +6,8 @@ export function makeBars(count = 60, start = 10, step = 0.17): QuoteBar[] {
   return Array.from({ length: count }, (_, index) => {
     const close = start + index * step
     return {
-      date: `2026-01-${String((index % 28) + 1).padStart(2, '0')}`,
+      // Sequential unique dates so date-keyed logic sees one bar per day.
+      date: new Date(Date.UTC(2025, 0, 1) + index * 86_400_000).toISOString().slice(0, 10),
       open: close - step * 0.4,
       high: close + step * 0.8,
       low: close - step * 0.8,

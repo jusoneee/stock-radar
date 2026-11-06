@@ -13,6 +13,8 @@ export interface AdapterContext {
   /** In-memory response cache TTL, in milliseconds. 0 disables caching. */
   cacheTtlMs: number
   now: Date
+  /** Symbols of the current run, used by per-symbol custom news sources. */
+  symbols?: string[]
 }
 
 export type AdapterErrorCode = 'MISSING_KEY' | 'NOT_IMPLEMENTED' | 'NETWORK' | 'TIMEOUT' | 'PARSE'
