@@ -36,6 +36,7 @@ const META: ChannelMeta = {
   reliability: 0.75,
   latencyMs: 420,
   simulated: false,
+  requiresProxy: true,
   rateLimit: '公开接口，建议 ≤2 请求/秒；无 CORS，需经 /api/sina-* 代理',
 }
 

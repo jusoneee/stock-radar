@@ -33,6 +33,7 @@ const META: ChannelMeta = {
   reliability: 0.95,
   latencyMs: 700,
   simulated: false,
+  requiresProxy: true,
   rateLimit: '按账号积分限频（免费账号约每分钟 50 次），本适配器串行请求 + 缓存',
 }
 

@@ -1,36 +1,27 @@
 import { defineStore } from 'pinia'
 import type { AnalysisReport, AnalysisSnapshot } from '@/types'
+import { readJson, writeJson } from '@/lib/storage'
 
 const STORAGE_KEY = 'stock-radar:snapshots:v1'
 const MAX_SNAPSHOTS = 8
 
 function read(): AnalysisSnapshot[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((item): item is AnalysisSnapshot => {
-      const candidate = item as Partial<AnalysisSnapshot> | null
-      return Boolean(candidate && typeof candidate.id === 'string' && Array.isArray(candidate.items))
-    })
-  } catch {
-    localStorage.removeItem(STORAGE_KEY)
-    return []
-  }
+  const parsed = readJson<unknown>(STORAGE_KEY)
+  if (!Array.isArray(parsed)) return []
+  return parsed.filter((item): item is AnalysisSnapshot => {
+    const candidate = item as Partial<AnalysisSnapshot> | null
+    return Boolean(candidate && typeof candidate.id === 'string' && Array.isArray(candidate.items))
+  })
 }
 
 function persist(list: AnalysisSnapshot[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
-  } catch {
-    // History is best-effort; quota failures must not break analysis.
-  }
+  writeJson(STORAGE_KEY, list)
 }
 
 /**
  * Compact local history of analysis runs. Full K-line series are dropped so
- * localStorage stays small; only score, trend and price deltas are comparable.
+ * the persisted payload stays small; only score, trend and price deltas are
+ * comparable. Stored through the unified storage layer (IndexedDB).
  */
 export const useSnapshotsStore = defineStore('snapshots', {
   state: () => ({
@@ -46,6 +37,14 @@ export const useSnapshotsStore = defineStore('snapshots', {
       if (this.initialized) return
       this.initialized = true
       this.items = read()
+    },
+    /** Apply persisted history once IndexedDB hydration has completed. */
+    rehydrateFromStorage(): void {
+      // Snapshots captured before hydration stay authoritative; the storage
+      // layer persists those writes when it becomes ready.
+      if (this.items.length > 0) return
+      this.initialized = false
+      this.init()
     },
     capture(report: AnalysisReport): void {
       this.init()

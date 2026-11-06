@@ -29,6 +29,7 @@ const META: ChannelMeta = {
   reliability: 0.84,
   latencyMs: 180,
   simulated: false,
+  requiresProxy: true,
   rateLimit: '公开接口，建议 ≤1 请求/秒',
 }
 

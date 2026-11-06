@@ -154,6 +154,25 @@ a {
   flex: 1;
 }
 
+.storage-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border: 1px solid rgba(224, 166, 60, 0.45);
+  border-radius: var(--radius);
+  background: rgba(224, 166, 60, 0.12);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.storage-banner-text {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .app-footer {
   border-top: 1px solid var(--border);
   padding-top: 14px;

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import type { MarketPrefix, WatchItem } from '@/types'
 import { STOCK_UNIVERSE } from '@/adapters/mock/universe'
 import { marketOfSymbol } from '@/lib/market'
+import { readJson, writeJson, isStorageReady } from '@/lib/storage'
 
 const STORAGE_KEY = 'stock-radar:watchlist:v1'
 const LEGACY_CHANNEL_KEY = 'stock-radar:channel-config:v1'
@@ -54,6 +55,8 @@ export const useWatchlistStore = defineStore('watchlist', {
   state: () => ({
     items: [] as WatchItem[],
     initialized: false,
+    /** True when the user changed the pool before IndexedDB hydration finished. */
+    dirty: false,
     /** Last user-facing rejection reason, e.g. pool full. */
     notice: '',
     /** Manual order follows the array; other modes are applied by the view. */
@@ -81,58 +84,60 @@ export const useWatchlistStore = defineStore('watchlist', {
       if (this.initialized) return
       this.initialized = true
       this.items = defaultItems()
-      this.loadPersisted()
+      // Before hydration the cache is empty; seeding defaults must not overwrite
+      // the persisted pool, so only read storage once it is ready.
+      if (isStorageReady()) this.loadPersisted()
+    },
+    /** Re-read the persisted pool once IndexedDB hydration has completed. */
+    rehydrateFromStorage(): void {
+      if (this.dirty) {
+        this.persist()
+        return
+      }
+      this.initialized = false
+      this.init()
     },
     loadPersisted(): void {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY)
-        if (!raw) {
-          const legacy = readLegacySymbols()
-          if (legacy) {
-            this.items = legacy
-            this.persist()
-          }
-          return
+      const parsed = readJson<{ items?: unknown; sortMode?: unknown }>(STORAGE_KEY)
+      if (!parsed) {
+        const legacy = readLegacySymbols()
+        if (legacy) {
+          this.items = legacy
+          this.persist()
         }
-        const parsed = JSON.parse(raw) as { items?: unknown; sortMode?: unknown }
-        if (!Array.isArray(parsed.items)) return
-        const seen = new Set<string>()
-        const items: WatchItem[] = []
-        for (const value of parsed.items) {
-          const candidate = value as Partial<WatchItem> | null
-          if (!candidate || typeof candidate.symbol !== 'string') continue
-          if (!isValidSymbol(candidate.symbol) || seen.has(candidate.symbol)) continue
-          seen.add(candidate.symbol)
-          items.push({
-            symbol: candidate.symbol,
-            name: typeof candidate.name === 'string' && candidate.name ? candidate.name : candidate.symbol,
-            market:
-              candidate.market === 'SH' || candidate.market === 'SZ' || candidate.market === 'BJ'
-                ? candidate.market
-                : marketOf(candidate.symbol),
-            group: typeof candidate.group === 'string' && candidate.group.trim() ? candidate.group.trim() : undefined,
-            favorite: candidate.favorite !== false,
-            addedAt: candidate.addedAt,
-          })
-          if (items.length >= MAX_WATCHLIST) break
-        }
-        // An explicitly saved empty list is a valid user choice.
-        this.items = items
-        if (parsed.sortMode === 'name' || parsed.sortMode === 'symbol' || parsed.sortMode === 'added') {
-          this.sortMode = parsed.sortMode
-        } else if (parsed.sortMode === 'manual') {
-          this.sortMode = 'manual'
-        }
-      } catch {
-        localStorage.removeItem(STORAGE_KEY)
+        return
+      }
+      if (!Array.isArray(parsed.items)) return
+      const seen = new Set<string>()
+      const items: WatchItem[] = []
+      for (const value of parsed.items) {
+        const candidate = value as Partial<WatchItem> | null
+        if (!candidate || typeof candidate.symbol !== 'string') continue
+        if (!isValidSymbol(candidate.symbol) || seen.has(candidate.symbol)) continue
+        seen.add(candidate.symbol)
+        items.push({
+          symbol: candidate.symbol,
+          name: typeof candidate.name === 'string' && candidate.name ? candidate.name : candidate.symbol,
+          market:
+            candidate.market === 'SH' || candidate.market === 'SZ' || candidate.market === 'BJ'
+              ? candidate.market
+              : marketOf(candidate.symbol),
+          group: typeof candidate.group === 'string' && candidate.group.trim() ? candidate.group.trim() : undefined,
+          favorite: candidate.favorite !== false,
+          addedAt: candidate.addedAt,
+        })
+        if (items.length >= MAX_WATCHLIST) break
+      }
+      // An explicitly saved empty list is a valid user choice.
+      this.items = items
+      if (parsed.sortMode === 'name' || parsed.sortMode === 'symbol' || parsed.sortMode === 'added') {
+        this.sortMode = parsed.sortMode
+      } else if (parsed.sortMode === 'manual') {
+        this.sortMode = 'manual'
       }
     },
     persist(): void {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ items: this.items, sortMode: this.sortMode }))
-      } catch {
-        // Ignore quota errors; the list stays usable in memory.
-      }
+      writeJson(STORAGE_KEY, { items: this.items, sortMode: this.sortMode })
     },
     has(symbol: string): boolean {
       return this.items.some((item) => item.symbol === symbol)
@@ -151,6 +156,7 @@ export const useWatchlistStore = defineStore('watchlist', {
         addedAt: new Date().toISOString(),
       })
       this.notice = ''
+      this.dirty = true
       this.persist()
       return 'added'
     },
@@ -158,10 +164,12 @@ export const useWatchlistStore = defineStore('watchlist', {
       const item = this.items.find((entry) => entry.symbol === symbol)
       if (!item) return
       item.favorite = item.favorite === false
+      this.dirty = true
       this.persist()
     },
     remove(symbol: string): void {
       this.items = this.items.filter((item) => item.symbol !== symbol)
+      this.dirty = true
       this.persist()
     },
     /** Assign (or clear) the group of one symbol. */
@@ -169,6 +177,7 @@ export const useWatchlistStore = defineStore('watchlist', {
       const item = this.items.find((entry) => entry.symbol === symbol)
       if (!item) return
       item.group = group.trim() || undefined
+      this.dirty = true
       this.persist()
     },
     /** Move one item up or down in manual order. */
@@ -180,21 +189,25 @@ export const useWatchlistStore = defineStore('watchlist', {
       if (!item) return
       this.items.splice(target, 0, item)
       this.sortMode = 'manual'
+      this.dirty = true
       this.persist()
     },
     setSortMode(mode: WatchSortMode): void {
       this.sortMode = mode
+      this.dirty = true
       this.persist()
     },
     clear(): void {
       this.items = []
       this.notice = ''
+      this.dirty = true
       this.persist()
     },
     /** Restore the built-in 10-stock demo pool. */
     reset(): void {
       this.items = defaultItems()
       this.notice = ''
+      this.dirty = true
       this.persist()
     },
   },

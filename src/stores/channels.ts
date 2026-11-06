@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { CHANNEL_CATALOG, DEFAULT_ENABLED_CHANNELS } from '@/adapters/registry'
 import type { AdapterSettings, ChannelMeta, StockProfileLite } from '@/types'
+import { isChannelAvailable, unavailableList, type UnavailableChannel } from '@/adapters/availability'
 
 const STORAGE_KEY = 'stock-radar:channel-config:v1'
 
@@ -23,6 +24,21 @@ function defaultChannels(): ChannelState[] {
     enabled: DEFAULT_ENABLED_CHANNELS.includes(meta.id),
     weight: meta.reliability,
   }))
+}
+
+function metaOf(id: string): ChannelMeta | undefined {
+  return CHANNEL_CATALOG.find((item) => item.id === id)
+}
+
+/** Enabled *and* runnable in the current deployment (static build skips proxy-only feeds). */
+function isEffective(channel: ChannelState): boolean {
+  const meta = metaOf(channel.id)
+  return channel.enabled && Boolean(meta && isChannelAvailable(meta))
+}
+
+/** Enabled channels whose provider still needs the proxy (used for explicit degradation notes). */
+function isEffectiveCandidate(channel: ChannelState): boolean {
+  return channel.enabled
 }
 
 /**
@@ -54,32 +70,43 @@ export const useChannelsStore = defineStore('channels', {
     quoteCatalog: (): ChannelMeta[] => CHANNEL_CATALOG.filter((meta) => meta.kind === 'quote'),
     newsCatalog: (): ChannelMeta[] => CHANNEL_CATALOG.filter((meta) => meta.kind === 'news'),
     enabledCount(state): number {
-      return state.channels.filter((channel) => channel.enabled).length
+      return state.channels.filter(isEffective).length
+    },
+    /** Enabled channels that this deployment cannot reach (state + reason for the UI). */
+    unavailableQuote(state): UnavailableChannel[] {
+      return unavailableList(
+        state.channels.filter(isEffectiveCandidate).map((channel) => metaOf(channel.id)).filter((meta): meta is ChannelMeta => Boolean(meta && meta.kind === 'quote')),
+      )
+    },
+    unavailableNews(state): UnavailableChannel[] {
+      return unavailableList(
+        state.channels.filter(isEffectiveCandidate).map((channel) => metaOf(channel.id)).filter((meta): meta is ChannelMeta => Boolean(meta && meta.kind === 'news')),
+      )
     },
     quoteSettings(state): Array<{ id: string; weight: number }> {
       const enabled = state.channels.filter((channel) => {
-        const meta = CHANNEL_CATALOG.find((item) => item.id === channel.id)
-        return channel.enabled && meta?.kind === 'quote'
+        const meta = metaOf(channel.id)
+        return isEffective(channel) && meta?.kind === 'quote'
       })
       return normalize(enabled.map((channel) => ({ id: channel.id, weight: channel.weight })))
     },
     newsSettings(state): Array<{ id: string; weight: number }> {
       const enabled = state.channels.filter((channel) => {
-        const meta = CHANNEL_CATALOG.find((item) => item.id === channel.id)
-        return channel.enabled && meta?.kind === 'news'
+        const meta = metaOf(channel.id)
+        return isEffective(channel) && meta?.kind === 'news'
       })
       return normalize(enabled.map((channel) => ({ id: channel.id, weight: channel.weight })))
     },
     /** Enabled built-in quote channels without normalization, for merging with custom sources. */
     rawQuoteWeights(state): Array<{ id: string; weight: number }> {
       return state.channels
-        .filter((channel) => channel.enabled && CHANNEL_CATALOG.find((item) => item.id === channel.id)?.kind === 'quote')
+        .filter((channel) => isEffective(channel) && metaOf(channel.id)?.kind === 'quote')
         .map((channel) => ({ id: channel.id, weight: channel.weight }))
     },
     /** Enabled built-in news channels without normalization, for merging with custom sources. */
     rawNewsWeights(state): Array<{ id: string; weight: number }> {
       return state.channels
-        .filter((channel) => channel.enabled && CHANNEL_CATALOG.find((item) => item.id === channel.id)?.kind === 'news')
+        .filter((channel) => isEffective(channel) && metaOf(channel.id)?.kind === 'news')
         .map((channel) => ({ id: channel.id, weight: channel.weight }))
     },
   },
@@ -155,6 +182,9 @@ export const useChannelsStore = defineStore('channels', {
     toggle(id: string): void {
       const channel = this.channels.find((item) => item.id === id)
       if (!channel) return
+      const meta = metaOf(id)
+      // Proxy-only channels cannot be turned on in a static deployment.
+      if (meta && !isChannelAvailable(meta)) return
       channel.enabled = !channel.enabled
       this.persist()
     },
@@ -169,8 +199,10 @@ export const useChannelsStore = defineStore('channels', {
     },
     enableAll(kind: 'quote' | 'news', enabled: boolean): void {
       for (const channel of this.channels) {
-        const meta = CHANNEL_CATALOG.find((item) => item.id === channel.id)
-        if (meta?.kind === kind) channel.enabled = enabled
+        const meta = metaOf(channel.id)
+        if (!meta || meta.kind !== kind) continue
+        if (enabled && !isChannelAvailable(meta)) continue
+        channel.enabled = enabled
       }
       this.persist()
     },

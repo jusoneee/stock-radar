@@ -6,6 +6,7 @@ import { useWatchlistStore } from '@/stores/watchlist'
 import { useAnalysisSettingsStore } from '@/stores/analysis-settings'
 import ChannelCard from '@/components/ChannelCard.vue'
 import CustomSourcesPanel from '@/components/CustomSourcesPanel.vue'
+import { PROXY_AVAILABLE, channelAvailability } from '@/adapters/availability'
 import type { ChannelMeta, ScoreWeights } from '@/types'
 
 const store = useChannelsStore()
@@ -27,19 +28,26 @@ interface ChannelView {
   weight: number
   share: number
   apiKey: string
+  available: boolean
+  unavailableReason: string
 }
+
+const staticMode = !PROXY_AVAILABLE
 
 function buildView(kind: 'quote' | 'news', normalized: Array<{ id: string; weight: number }>): ChannelView[] {
   const catalog = kind === 'quote' ? store.quoteCatalog : store.newsCatalog
   return catalog.map((meta) => {
     const state = store.channels.find((item) => item.id === meta.id)
     const share = normalized.find((item) => item.id === meta.id)?.weight ?? 0
+    const availability = channelAvailability(meta)
     return {
       meta,
       enabled: state?.enabled ?? false,
       weight: state?.weight ?? meta.reliability,
       share,
       apiKey: store.keys[meta.id] ?? '',
+      available: availability.available,
+      unavailableReason: availability.reason,
     }
   })
 }
@@ -47,8 +55,9 @@ function buildView(kind: 'quote' | 'news', normalized: Array<{ id: string; weigh
 const quoteCards = computed(() => buildView('quote', store.quoteSettings))
 const newsCards = computed(() => buildView('news', store.newsSettings))
 
-const quoteEnabled = computed(() => quoteCards.value.filter((item) => item.enabled).length)
-const newsEnabled = computed(() => newsCards.value.filter((item) => item.enabled).length)
+const quoteEnabled = computed(() => quoteCards.value.filter((item) => item.enabled && item.available).length)
+const newsEnabled = computed(() => newsCards.value.filter((item) => item.enabled && item.available).length)
+const unavailableCount = computed(() => [...quoteCards.value, ...newsCards.value].filter((item) => !item.available).length)
 
 function onTimeout(event: Event): void {
   store.setTimeoutMs(Number((event.target as HTMLInputElement).value))
@@ -68,12 +77,20 @@ function onCacheTtl(event: Event): void {
     <header class="page-head">
       <div>
         <h1>数据源配置</h1>
-        <p>选择信息来源渠道，设置权重与密钥。配置会持久化到浏览器本地，密钥仅保存在当前会话内存中。</p>
+        <p>选择信息来源渠道，设置权重与密钥。配置会持久化到浏览器本地（小配置 localStorage，全市场列表等大体量数据 IndexedDB），密钥仅保存在当前会话内存中。</p>
       </div>
       <div class="page-head-actions">
         <button class="btn btn-ghost" @click="store.reset()">恢复默认</button>
       </div>
     </header>
+
+    <div v-if="staticMode && unavailableCount > 0" class="notice">
+      <strong>纯静态部署能力边界</strong>
+      <p>
+        当前构建未包含 <code>/api</code> 同源代理，{{ unavailableCount }} 个依赖代理的渠道已标记为「纯静态不可用」并自动跳过。
+        这些渠道的开关被禁用，不会发起请求，也不会返回模拟数据；东方财富、腾讯行情等 CORS 可达渠道不受影响。
+      </p>
+    </div>
 
     <div class="card">
       <header class="card-head">
@@ -92,12 +109,14 @@ function onCacheTtl(event: Event): void {
           :weight="card.weight"
           :normalized-weight="card.share"
           :api-key="card.apiKey"
+          :available="card.available"
+          :unavailable-reason="card.unavailableReason"
           @update:enabled="store.toggle(card.meta.id)"
           @update:weight="(value) => store.setWeight(card.meta.id, value)"
           @update:apiKey="(value) => store.setKey(card.meta.id, value)"
         />
       </div>
-      <p v-if="quoteEnabled === 0" class="inline-warn">未启用任何行情源，分析将无法运行。</p>
+      <p v-if="quoteEnabled === 0" class="inline-warn">未启用任何可用行情源，分析将无法运行。</p>
     </div>
 
     <div class="card">
@@ -117,12 +136,16 @@ function onCacheTtl(event: Event): void {
           :weight="card.weight"
           :normalized-weight="card.share"
           :api-key="card.apiKey"
+          :available="card.available"
+          :unavailable-reason="card.unavailableReason"
           @update:enabled="store.toggle(card.meta.id)"
           @update:weight="(value) => store.setWeight(card.meta.id, value)"
           @update:apiKey="(value) => store.setKey(card.meta.id, value)"
         />
       </div>
-      <p v-if="newsEnabled === 0" class="inline-warn">未启用新闻源时，事件驱动分项按中性 50 分处理。</p>
+      <p v-if="newsEnabled === 0" class="inline-warn">
+        未启用任何可用新闻源时，事件驱动分项按中性 50 分处理；纯静态部署可通过支持 CORS 的自定义资讯源补齐。
+      </p>
     </div>
 
     <div class="card">
