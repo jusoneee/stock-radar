@@ -1,6 +1,7 @@
 import type { ChannelMeta, RawNewsItem } from '@/types'
 import { AdapterError, type AdapterContext, type NewsAdapter } from '@/adapters/types'
 import { fetchJson } from '@/adapters/http'
+import { safeExternalUrl } from '@/lib/url'
 
 /**
  * Live Sina Finance news adapter (rolling news feed).
@@ -74,7 +75,8 @@ export const sinaNewsAdapter: NewsAdapter = {
           title: row.title ?? '',
           content: row.intro?.trim() || row.title || '',
           publishedAt,
-          url: row.url,
+          // Upstream text is untrusted: only keep safe http(s) article links.
+          url: safeExternalUrl(row.url) ?? undefined,
           symbols: [],
         }
       })

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resolvePath, toDateKey, toNumber } from '@/adapters/custom/resolve'
+import { isSafeFieldPath, resolvePath, toDateKey, toNumber } from '@/adapters/custom/resolve'
 import { defaultFieldMap, type CustomSourceConfig } from '@/adapters/custom/types'
-import { testCustomSource } from '@/adapters/custom/runtime'
+import { buildCustomNewsAdapter, testCustomSource } from '@/adapters/custom/runtime'
+import { validateUrlTemplate } from '@/stores/custom-sources'
 
 function config(kind: 'quote' | 'news' = 'quote'): CustomSourceConfig {
   return {
@@ -33,6 +34,33 @@ describe('custom source path resolver', () => {
     expect(toNumber('abc')).toBeNull()
     expect(toDateKey('2026/03/05')).toBe('2026-03-05')
     expect(toDateKey('not-a-date')).toBe('')
+  })
+
+  it('refuses prototype-chain paths', () => {
+    expect(isSafeFieldPath('data.klines[*].close')).toBe(true)
+    expect(isSafeFieldPath('$.data.items[0].title')).toBe(true)
+    expect(isSafeFieldPath('__proto__.polluted')).toBe(false)
+    expect(isSafeFieldPath('constructor.prototype')).toBe(false)
+    expect(resolvePath({ data: { price: 1 } }, '__proto__')).toBeUndefined()
+    expect(resolvePath({ data: { price: 1 } }, 'constructor.prototype')).toBeUndefined()
+  })
+})
+
+describe('custom source config validation', () => {
+  it('accepts absolute http(s) templates with a symbol placeholder', () => {
+    expect(validateUrlTemplate('https://api.test/quote/{symbol}')).toBe('https://api.test/quote/{symbol}')
+    expect(validateUrlTemplate('http://data.example.test:8080/api')).toBe('http://data.example.test:8080/api')
+  })
+
+  it('rejects script schemes, credentials, whitespace and private hosts', () => {
+    expect(validateUrlTemplate('javascript:alert(1)')).toBeNull()
+    expect(validateUrlTemplate('ftp://api.test/data')).toBeNull()
+    expect(validateUrlTemplate('https://user:pass@api.test/quote')).toBeNull()
+    expect(validateUrlTemplate('https://api.test/quote {symbol}')).toBeNull()
+    expect(validateUrlTemplate('//api.test/quote')).toBeNull()
+    expect(validateUrlTemplate('http://127.0.0.1:8080/api')).toBeNull()
+    expect(validateUrlTemplate('http://192.168.1.10/api')).toBeNull()
+    expect(validateUrlTemplate('http://localhost:8080/api')).toBeNull()
   })
 })
 
@@ -107,6 +135,42 @@ describe('custom source connection test', () => {
     expect(result.ok).toBe(true)
     expect(result.sampleCount).toBe(1)
     expect(result.samples[0]).toContain('示例新闻')
+    vi.unstubAllGlobals()
+  })
+
+  it('strips script URLs from custom news while keeping https links', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                title: '<img src=x onerror="window.__xss=1">恶意标题',
+                content: '<script>window.__xss=2</script>',
+                publishedAt: '2026-03-04T08:00:00Z',
+                url: 'javascript:window.__xss=3',
+              },
+              { title: '正常新闻', publishedAt: '2026-03-04T08:00:00Z', url: 'https://news.test/a' },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    )
+    const adapter = buildCustomNewsAdapter(config('news'), '')
+    const items = await adapter.fetchNews({
+      timeoutMs: 3_000,
+      retryCount: 0,
+      cacheTtlMs: 0,
+      now: new Date('2026-03-05T00:00:00Z'),
+      symbols: ['600519'],
+    })
+    expect(items).toHaveLength(2)
+    // The title stays as plain text (the UI escapes it); only the href is dropped.
+    expect(items[0]!.title).toContain('<img')
+    expect(items[0]!.url).toBeUndefined()
+    expect(items[1]!.url).toBe('https://news.test/a')
     vi.unstubAllGlobals()
   })
 })

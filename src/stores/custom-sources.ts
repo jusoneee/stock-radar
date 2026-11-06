@@ -1,12 +1,30 @@
 import { defineStore } from 'pinia'
 import type { CustomFieldMap, CustomSourceConfig, CustomSourceKind } from '@/adapters/custom/types'
 import { defaultFieldMap } from '@/adapters/custom/types'
+import { isSafeFieldPath } from '@/adapters/custom/resolve'
 import { buildCustomNewsAdapter, buildCustomQuoteAdapter } from '@/adapters/custom/runtime'
+import { isPrivateHostname } from '@/lib/url'
 
 const STORAGE_KEY = 'stock-radar:custom-sources:v1'
 
-function isHttpUrl(value: string): boolean {
-  return /^https?:\/\/[^\s]+$/.test(value)
+/**
+ * Validate a user-supplied URL template. `{symbol}` is substituted with a
+ * sample code first, then the result must be absolute http(s) without
+ * embedded credentials, whitespace/control characters, or a private host.
+ */
+export function validateUrlTemplate(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed || /[\u0000-\u001f\u007f\s]/.test(trimmed)) return null
+  const sample = trimmed.replace(/\{symbol\}/g, '600519')
+  try {
+    const url = new URL(sample)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    if (url.username || url.password) return null
+    if (isPrivateHostname(url.hostname)) return null
+    return trimmed
+  } catch {
+    return null
+  }
 }
 
 function clampWeight(value: number): number {
@@ -29,13 +47,14 @@ function sanitize(raw: unknown): CustomSourceConfig | null {
   const value = raw as Partial<CustomSourceConfig>
   if (typeof value.id !== 'string' || !value.id.startsWith('custom-')) return null
   if (value.kind !== 'quote' && value.kind !== 'news') return null
-  if (typeof value.urlTemplate !== 'string' || !isHttpUrl(value.urlTemplate)) return null
+  const urlTemplate = typeof value.urlTemplate === 'string' ? validateUrlTemplate(value.urlTemplate) : null
+  if (!urlTemplate) return null
   if (typeof value.name !== 'string' || !value.name.trim()) return null
   return {
     id: value.id,
     name: value.name.trim().slice(0, 30),
     kind: value.kind,
-    urlTemplate: value.urlTemplate.trim(),
+    urlTemplate,
     method: value.method === 'POST' ? 'POST' : 'GET',
     bodyTemplate: typeof value.bodyTemplate === 'string' ? value.bodyTemplate : undefined,
     timeoutMs: clampTimeout(Number(value.timeoutMs)),
@@ -53,6 +72,7 @@ function sanitizeMap(raw: unknown, kind: CustomSourceKind): CustomFieldMap {
   const result: CustomFieldMap = { ...fallback }
   for (const [key, path] of Object.entries(raw as Record<string, unknown>)) {
     if (typeof path !== 'string' || !path.trim()) continue
+    if (!isSafeFieldPath(path)) continue
     result[key as keyof CustomFieldMap] = path.trim().slice(0, 120)
   }
   return result
@@ -134,12 +154,13 @@ export const useCustomSourcesStore = defineStore('customSources', {
       viaProxy: boolean
       enabled?: boolean
     }): CustomSourceConfig | null {
-      if (!input.name.trim() || !isHttpUrl(input.urlTemplate.trim())) return null
+      const urlTemplate = validateUrlTemplate(input.urlTemplate)
+      if (!input.name.trim() || !urlTemplate) return null
       const config: CustomSourceConfig = {
         id: makeId(input.kind),
         name: input.name.trim().slice(0, 30),
         kind: input.kind,
-        urlTemplate: input.urlTemplate.trim(),
+        urlTemplate,
         method: input.method,
         bodyTemplate: input.bodyTemplate?.trim() || undefined,
         timeoutMs: clampTimeout(input.timeoutMs),
@@ -157,8 +178,9 @@ export const useCustomSourcesStore = defineStore('customSources', {
       const target = this.sources.find((item) => item.id === id)
       if (!target) return
       if (typeof patch.name === 'string' && patch.name.trim()) target.name = patch.name.trim().slice(0, 30)
-      if (typeof patch.urlTemplate === 'string' && isHttpUrl(patch.urlTemplate.trim())) {
-        target.urlTemplate = patch.urlTemplate.trim()
+      if (typeof patch.urlTemplate === 'string') {
+        const urlTemplate = validateUrlTemplate(patch.urlTemplate)
+        if (urlTemplate) target.urlTemplate = urlTemplate
       }
       if (patch.method === 'GET' || patch.method === 'POST') target.method = patch.method
       if (typeof patch.bodyTemplate === 'string') target.bodyTemplate = patch.bodyTemplate.trim() || undefined

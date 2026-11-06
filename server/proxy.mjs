@@ -161,6 +161,11 @@ function customUpstream(target) {
   if (!allowed) {
     return { error: `域名 ${hostname} 不在白名单，请配置 CUSTOM_SOURCE_ALLOWLIST` }
   }
+  // `..` is normalised by the URL parser, but encoded variants survive and
+  // would let a caller escape the allowed path prefix on the upstream.
+  if (parsed.pathname.includes('..') || /%2e|\\/i.test(parsed.pathname)) {
+    return { error: '目标路径包含非法片段' }
+  }
   if (!parsed.pathname.startsWith(allowed.prefix)) {
     return { error: `路径 ${parsed.pathname} 不在允许前缀 ${allowed.prefix}` }
   }
@@ -193,6 +198,31 @@ function sendJson(res, status, payload) {
   const body = JSON.stringify(payload)
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' })
   res.end(body)
+}
+
+/**
+ * Copy only safe, content-related upstream headers. `set-cookie`, `location`,
+ * `access-control-*` and hop-by-hop headers must never reach our origin.
+ */
+const FORWARDED_RESPONSE_HEADERS = new Set([
+  'content-type',
+  'content-encoding',
+  'content-language',
+  'cache-control',
+  'expires',
+  'etag',
+  'last-modified',
+  'vary',
+])
+
+function safeResponseHeaders(upstreamHeaders, cors) {
+  const result = {}
+  for (const [key, value] of Object.entries(upstreamHeaders ?? {})) {
+    if (FORWARDED_RESPONSE_HEADERS.has(key.toLowerCase()) && value !== undefined) {
+      result[key] = value
+    }
+  }
+  return { ...result, ...cors }
 }
 
 async function serveStatic(url, res) {
@@ -284,7 +314,7 @@ const server = createServer(async (req, res) => {
           received += chunk.length
           if (received > 5_000_000) proxyRes.destroy(new Error('upstream response too large'))
         })
-        res.writeHead(proxyRes.statusCode ?? 502, { ...proxyRes.headers, ...cors })
+        res.writeHead(proxyRes.statusCode ?? 502, safeResponseHeaders(proxyRes.headers, cors))
         proxyRes.pipe(res)
       },
     )
@@ -334,7 +364,7 @@ const server = createServer(async (req, res) => {
       timeout: 20_000,
     },
     (proxyRes) => {
-      const responseHeaders = { ...proxyRes.headers, ...cors }
+      const responseHeaders = safeResponseHeaders(proxyRes.headers, cors)
       res.writeHead(proxyRes.statusCode ?? 502, responseHeaders)
       proxyRes.pipe(res)
     },

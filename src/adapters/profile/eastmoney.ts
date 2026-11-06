@@ -1,4 +1,5 @@
 import { marketOfSymbol } from '@/lib/market'
+import { safeWebsite } from '@/lib/url'
 
 /**
  * Company profile from Eastmoney F10 (verified 2026-11-05: HTTP 200,
@@ -71,7 +72,7 @@ export async function fetchCompanyProfile(symbol: string, signal?: AbortSignal):
       regCapital: Number.isFinite(capital) ? capital : null,
       foundDate: dateOnly(row.FOUND_DATE),
       regAddress: text(row.REG_ADDRESS) || text(row.ADDRESS),
-      website: text(row.ORG_WEB),
+      website: safeWebsite(row.ORG_WEB) ?? '',
       mainBusiness: text(row.MAIN_BUSINESS),
       businessScope: text(row.BUSINESS_SCOPE),
       profile: text(row.ORG_PROFILE),

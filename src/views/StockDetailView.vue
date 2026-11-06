@@ -41,6 +41,7 @@ const range = ref<60 | 120>(60)
 const profileChecked = ref(false)
 
 const displayName = computed(() => snapshot.value?.name || hintName.value || symbol.value)
+const websiteLabel = computed(() => profile.value?.website.replace(/^https?:\/\//i, '').replace(/\/$/, '') ?? '')
 const isFavorite = computed(() => {
   const entry = watchlist.items.find((item) => item.symbol === symbol.value)
   return Boolean(entry && entry.favorite !== false)
@@ -229,8 +230,8 @@ watch(symbol, load)
               <dt>注册地址</dt><dd>{{ profile.regAddress || '未返回' }}</dd>
               <dt>公司网站</dt>
               <dd>
-                <a v-if="profile.website" :href="`https://${profile.website}`" target="_blank" rel="noopener noreferrer">
-                  {{ profile.website }}
+                <a v-if="profile.website" :href="profile.website" target="_blank" rel="noopener noreferrer">
+                  {{ websiteLabel }}
                 </a>
                 <span v-else>未返回</span>
               </dd>

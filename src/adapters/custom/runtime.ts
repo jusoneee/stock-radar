@@ -1,6 +1,7 @@
 import type { ChannelMeta, QuoteBar, QuoteSnapshot, RawNewsItem } from '@/types'
 import { AdapterError, type AdapterContext, type NewsAdapter, type QuoteAdapter } from '@/adapters/types'
 import { mapWithConcurrency } from '@/lib/concurrency'
+import { safeExternalUrl } from '@/lib/url'
 import type { ConnectionTestResult, CustomSourceConfig } from './types'
 import { resolvePath, toDateKey, toIsoTime, toNumber, toText } from './resolve'
 
@@ -220,7 +221,8 @@ function parseNews(config: CustomSourceConfig, json: unknown, now: Date): RawNew
         config.fieldMap.publishedAt ? resolvePath(record, config.fieldMap.publishedAt!) : undefined,
         now,
       ),
-      url: pick('url') || undefined,
+      // Never pass untrusted `javascript:` / `data:` URLs through to the UI.
+      url: safeExternalUrl(pick('url')) ?? undefined,
       symbols,
     })
   })

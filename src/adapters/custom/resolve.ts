@@ -23,6 +23,14 @@ export function tokenizePath(path: string): string[] {
   return tokens
 }
 
+/** Keys that could reach the prototype chain when walking plain objects. */
+const FORBIDDEN_TOKENS = new Set(['__proto__', 'prototype', 'constructor'])
+
+/** Reject paths that try to traverse the prototype chain. */
+export function isSafeFieldPath(path: string): boolean {
+  return tokenizePath(path).every((token) => token === '*' || !FORBIDDEN_TOKENS.has(token))
+}
+
 export function resolvePath(root: unknown, path: string): unknown {
   const tokens = tokenizePath(path)
   return walk(root, tokens)
@@ -33,6 +41,7 @@ function walk(value: unknown, tokens: string[]): unknown {
   if (value === null || value === undefined) return undefined
 
   const [head, ...rest] = tokens
+  if (FORBIDDEN_TOKENS.has(head)) return undefined
   if (head === '*') {
     if (Array.isArray(value)) {
       return value.map((item) => walk(item, rest)).filter((item) => item !== undefined)
