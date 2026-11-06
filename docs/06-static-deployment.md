@@ -57,6 +57,30 @@ npm run build
 - 打开 `http://localhost:<port>/stock-radar/` 能看到仪表盘，控制台无错误；
 - `#/channels` 页出现「纯静态不可用」渠道标记。
 
+### 2.4 私有仓库或套餐不支持 GitHub Pages
+
+GitHub Pages 对私有仓库有套餐要求。若当前账号套餐不支持，API 会返回：
+
+```json
+{"message":"Your current plan does not support GitHub Pages for this repository.","status":"422"}
+```
+
+此时不要擅自修改仓库可见性。可选路径：
+
+1. 升级账号套餐或由仓库所有者决定是否公开仓库（需人工确认）；
+2. 使用 Netlify 部署私有仓库（免费套餐支持私有仓库，通过 GitHub App 授权，不改可见性）。
+
+仓库已内置 `netlify.toml`：构建命令 `npm run build`、输出目录 `dist`、`NODE_VERSION=20`，并把 `VITE_BASE_PATH` 设为 `/`，让资源从 Netlify 域名根路径加载。
+
+Netlify 操作步骤：
+
+1. 打开 <https://app.netlify.com/>，登录后点 **Add new site → Import an existing project**；
+2. 选择 **Deploy with GitHub**，按提示授权 Netlify GitHub App；授权范围需包含 `jusoneee/stock-radar`（私有仓库必须显式授权）；
+3. 选择 `jusoneee/stock-radar` 仓库，构建配置会自动读取 `netlify.toml`，无需手填；
+4. 点 **Deploy**，完成后站点地址为 `https://<site-name>.netlify.app/`。
+
+部署后验证：首屏应显示仪表盘；`/assets/*.js`、`/assets/*.css`、`/manifest.webmanifest` 均应返回 200。hash 路由（`#/watchlist` 等）不需要额外的 SPA 回退配置。
+
 ## 3. 可选：自建代理部署
 
 需要新浪行情/资讯或 Tushare/AKShare 时，可自建同源代理；这是**可选路径**，不影响纯静态默认构建。
