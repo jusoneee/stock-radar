@@ -87,6 +87,7 @@ const chartSeries = computed<LineSeries[]>(() => {
 
 const rows = computed<CompareRow[]>(() => {
   const dates = commonDates.value
+  const dateSet = new Set(dates)
   const firstDate = dates[0]
   const lastDate = dates.at(-1)
   return results.value.map((item) => {
@@ -108,7 +109,7 @@ const rows = computed<CompareRow[]>(() => {
     const byDate = new Map(item.bars.map((bar) => [bar.date, bar]))
     const first = byDate.get(firstDate)
     const last = byDate.get(lastDate)
-    const covered = item.bars.filter((bar) => dates.includes(bar.date))
+    const covered = item.bars.filter((bar) => dateSet.has(bar.date))
     const coverage = dates.length > 0 ? Math.round((covered.length / dates.length) * 100) : 0
     const missingDays = dates.length - covered.length
     const forecast = forecastBars(item.bars)
