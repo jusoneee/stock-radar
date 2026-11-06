@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { QuoteBar } from '@/types'
 import { forecastBars } from '@/analysis/forecast'
+import { formatPercent, formatPrice } from '@/lib/format'
 
 const props = withDefaults(
   defineProps<{
@@ -13,16 +14,8 @@ const props = withDefaults(
 
 const forecast = computed(() => forecastBars(props.bars))
 
-function pct(value: number): string {
-  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
-}
-
 function probability(value: number): string {
   return `${(value * 100).toFixed(1)}%`
-}
-
-function price(value: number): string {
-  return value.toFixed(2)
 }
 </script>
 
@@ -49,7 +42,7 @@ function price(value: number): string {
           5 日方向概率 <strong>{{ probability(forecast.horizons[0]?.upProbability ?? 0) }}</strong>
         </span>
         <span class="muted">
-          区间 {{ forecast.horizons[0] ? `${price(forecast.horizons[0].lower)} ~ ${price(forecast.horizons[0].upper)}` : '—' }}
+          区间 {{ forecast.horizons[0] ? `${formatPrice(forecast.horizons[0].lower)} ~ ${formatPrice(forecast.horizons[0].upper)}` : '—' }}
         </span>
       </div>
 
@@ -68,15 +61,15 @@ function price(value: number): string {
             <tbody>
               <tr v-for="item in forecast.horizons" :key="item.days">
                 <td>{{ item.days }} 日</td>
-                <td>{{ price(item.central) }}</td>
-                <td :class="item.changePct >= 0 ? 'up' : 'down'">{{ pct(item.changePct) }}</td>
+                <td>{{ formatPrice(item.central) }}</td>
+                <td :class="item.changePct >= 0 ? 'up' : 'down'">{{ formatPercent(item.changePct) }}</td>
                 <td>
                   <span class="prob-bar">
                     <i :style="{ width: `${Math.round(item.upProbability * 100)}%` }" />
                   </span>
                   {{ probability(item.upProbability) }}
                 </td>
-                <td>{{ price(item.lower) }} ~ {{ price(item.upper) }}</td>
+                <td>{{ formatPrice(item.lower) }} ~ {{ formatPrice(item.upper) }}</td>
               </tr>
             </tbody>
           </table>

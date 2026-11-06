@@ -11,7 +11,7 @@ import { useCompareStore, MAX_COMPARE } from '@/stores/compare'
 import KlineChart from '@/components/KlineChart.vue'
 import ForecastPanel from '@/components/ForecastPanel.vue'
 import StockNewsPanel from '@/components/StockNewsPanel.vue'
-import { formatAmount, formatPercent, formatPrice } from '@/lib/format'
+import { formatAmount, formatDateTime, formatPercent, formatPrice } from '@/lib/format'
 
 const route = useRoute()
 const watchlist = useWatchlistStore()
@@ -42,6 +42,16 @@ const profileChecked = ref(false)
 
 const displayName = computed(() => snapshot.value?.name || hintName.value || symbol.value)
 const websiteLabel = computed(() => profile.value?.website.replace(/^https?:\/\//i, '').replace(/\/$/, '') ?? '')
+const freshness = computed(() => {
+  const bars = snapshot.value?.bars ?? []
+  const lastBar = bars.at(-1)
+  const asOf = snapshot.value?.asOf
+  return {
+    lastDate: lastBar?.date ?? '',
+    asOf: asOf ? formatDateTime(asOf) : '',
+    sessions: bars.length,
+  }
+})
 const isFavorite = computed(() => {
   const entry = watchlist.items.find((item) => item.symbol === symbol.value)
   return Boolean(entry && entry.favorite !== false)
@@ -141,6 +151,9 @@ watch(symbol, load)
         <p v-if="sourceName" class="muted">
           数据源：{{ sourceName }}<template v-if="snapshot?.sector"> · {{ snapshot.sector }}</template>
           · 前复权日线
+          <template v-if="freshness.lastDate">
+            · 最新交易日 {{ freshness.lastDate }} · 快照 {{ freshness.asOf }} · 共 {{ freshness.sessions }} 根
+          </template>
         </p>
       </div>
       <div class="page-head-actions">
@@ -207,7 +220,7 @@ watch(symbol, load)
           </header>
           <KlineChart :bars="snapshot.bars" :count="range" />
           <p class="hint-text">
-            图表为收盘价与成交量（红色上涨 / 绿色下跌），数据来自已启用的最高权重行情源；缺失交易日按接口返回为准。
+            图表为收盘价与成交量（红色上涨 / 绿色下跌），数据来自已启用的最高权重行情源；缺失交易日按接口返回为准。盘中快照会随行情刷新，日线最后一根若为当日则可能尚未收盘。
           </p>
         </div>
 
