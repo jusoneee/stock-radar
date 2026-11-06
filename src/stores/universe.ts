@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import type { StockProfileLite, UniverseCachePayload, UniverseStock } from '@/types'
 import { fetchUniverse, UNIVERSE_SOURCE } from '@/adapters/universe/eastmoney'
 import { nextTradingSessionStart } from '@/lib/trading-calendar'
+import { readJson, writeJson } from '@/lib/storage'
 
 const STORAGE_KEY = 'stock-radar:universe:v1'
 const CACHE_VERSION = 1
@@ -13,18 +14,11 @@ interface PersistedCache extends UniverseCachePayload {
 }
 
 function readCache(): PersistedCache | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as PersistedCache
-    if (!Array.isArray(parsed.items) || parsed.items.length === 0) return null
-    const sample = parsed.items[0]
-    if (!sample || typeof sample.symbol !== 'string' || typeof sample.name !== 'string') return null
-    return parsed
-  } catch {
-    localStorage.removeItem(STORAGE_KEY)
-    return null
-  }
+  const parsed = readJson<PersistedCache>(STORAGE_KEY)
+  if (!parsed || !Array.isArray(parsed.items) || parsed.items.length === 0) return null
+  const sample = parsed.items[0]
+  if (!sample || typeof sample.symbol !== 'string' || typeof sample.name !== 'string') return null
+  return parsed
 }
 
 function isFresh(expiresAt: string): boolean {
@@ -81,7 +75,15 @@ export const useUniverseStore = defineStore('universe', {
       this.status = 'ready'
       this.loadedFromCache = true
     },
+    /** Apply the persisted list once IndexedDB hydration has completed. */
+    rehydrateFromStorage(): void {
+      // A network sync already started or finished; its result is authoritative.
+      if (this.status === 'loading' || this.status === 'ready') return
+      this.initialized = false
+      this.init()
+    },
     persist(): void {
+      // readCache() now resolves through the unified storage layer (IndexedDB in the browser).
       const payload: PersistedCache = {
         version: CACHE_VERSION,
         items: this.items,
@@ -90,11 +92,7 @@ export const useUniverseStore = defineStore('universe', {
         source: this.source,
         providerTotal: this.providerTotal,
       }
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-      } catch {
-        // Quota exceeded should not break the feature: the in-memory list still works.
-      }
+      writeJson(STORAGE_KEY, payload)
     },
     async load(): Promise<void> {
       if (this.status === 'loading') return

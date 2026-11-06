@@ -4,6 +4,7 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useChannelsStore } from '@/stores/channels'
 import { useAnalysisStore } from '@/stores/analysis'
 import { useWatchlistStore } from '@/stores/watchlist'
+import { useStorageStore } from '@/stores/storage'
 import { getTradingStatus } from '@/lib/trading-calendar'
 import { COMPLIANCE_VERSION } from '@/lib/compliance'
 
@@ -12,6 +13,7 @@ const router = useRouter()
 const channels = useChannelsStore()
 const analysis = useAnalysisStore()
 const watchlist = useWatchlistStore()
+const storage = useStorageStore()
 
 const navItems = [
   { to: '/', label: '仪表盘' },
@@ -92,6 +94,14 @@ async function runAnalysis(): Promise<void> {
         </button>
       </div>
     </header>
+
+    <div v-if="storage.notice" class="storage-banner" role="status">
+      <span class="storage-banner-text">
+        {{ storage.notice }}
+        <span class="muted">当前存储：{{ storage.kindLabel }}</span>
+      </span>
+      <button class="btn btn-ghost" type="button" @click="storage.dismiss()">知道了</button>
+    </div>
 
     <main class="app-main">
       <RouterView />
