@@ -45,6 +45,11 @@ const router = createRouter({
       component: () => import('@/views/LegalView.vue'),
       meta: { title: '合规与数据来源' },
     },
+    {
+      // Unknown hashes must not render a blank page.
+      path: '/:pathMatch(.*)*',
+      redirect: '/',
+    },
   ],
 })
 
