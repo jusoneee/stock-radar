@@ -59,4 +59,28 @@ describe('statistical forecast', () => {
       expect(item.upper).toBeGreaterThanOrEqual(item.lower)
     }
   })
+
+  it('is insensitive to input order and duplicate dates', () => {
+    const ordered = series(120, 10, 0.12)
+    const shuffled = [...ordered].sort(() => Math.random() - 0.5)
+    const withDuplicates = [...shuffled, ...shuffled.slice(0, 5)]
+    const base = forecastBars(ordered)
+    expect(forecastBars(shuffled)).toEqual(base)
+    expect(forecastBars(withDuplicates)).toEqual(base)
+    expect(base.sampleSize).toBe(120)
+  })
+
+  it('does not leak the future: a post-trend crash lowers walk-forward direction accuracy', () => {
+    const rising = series(140, 10, 0.1)
+    const crash = rising.map((bar, index) =>
+      index < 120 ? bar : { ...bar, close: 22 - (index - 119) * 0.6, open: 22 - (index - 119) * 0.6 },
+    )
+    const up = forecastBars(rising)
+    const after = forecastBars(crash)
+    const upHit = up.validation.find((item) => item.days === 5)!.directionHitRate
+    const crashHit = after.validation.find((item) => item.days === 5)!.directionHitRate
+    // A model that peeked at the crash would flip direction and keep a high hit rate.
+    expect(upHit).toBeGreaterThan(0.8)
+    expect(crashHit).toBeLessThan(0.6)
+  })
 })

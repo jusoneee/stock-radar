@@ -256,7 +256,13 @@ export function forecastBars(bars: QuoteBar[], options: ForecastOptions = {}): F
   const minSamples = options.minSamples ?? 60
   const validationWindows = options.validationWindows ?? 20
   const ciLevel = 0.8
-  const usable = bars.filter((bar) => Number.isFinite(bar.close) && bar.close > 0)
+  // Upstream adapters are not guaranteed to be ordered: sort by date and drop
+  // duplicate dates so regression / walk-forward never reads out of sequence.
+  const byDate = new Map<string, QuoteBar>()
+  for (const bar of bars) {
+    if (Number.isFinite(bar.close) && bar.close > 0) byDate.set(bar.date, bar)
+  }
+  const usable = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
   const last = usable.at(-1)
 
   if (!last) {
