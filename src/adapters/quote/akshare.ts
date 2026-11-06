@@ -12,6 +12,7 @@ const META: ChannelMeta = {
   reliability: 0.86,
   latencyMs: 650,
   simulated: false,
+  requiresProxy: true,
   rateLimit: '取决于本地代理与上游站点，建议串行 + 缓存',
 }
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { NewsAnalysis } from '@/types'
+import type { UnavailableChannel } from '@/adapters/availability'
 import { sentimentLabels, stageLabels, toneClass } from '@/lib/labels'
 
 const props = defineProps<{
@@ -9,6 +10,8 @@ const props = defineProps<{
   failed: string[]
   loading?: boolean
   compact?: boolean
+  /** Enabled feeds this deployment cannot reach; surfaced as an explicit degradation note. */
+  degraded?: UnavailableChannel[]
 }>()
 
 const distribution = computed(() => {
@@ -36,6 +39,7 @@ const stages = computed(() => {
 
 const latest = computed(() => props.news[0] ?? null)
 const visible = computed(() => (props.compact ? props.news.slice(0, 2) : props.news))
+const degraded = computed(() => props.degraded ?? [])
 </script>
 
 <template>
@@ -43,6 +47,17 @@ const visible = computed(() => (props.compact ? props.news.slice(0, 2) : props.n
     <header class="news-head">
       <h2>相关资讯与舆情 <span class="muted">{{ news.length }} 条命中 / 原始 {{ rawCount }} 条</span></h2>
     </header>
+
+    <div v-if="degraded.length" class="news-degraded">
+      <strong>纯静态降级：{{ degraded.length }} 个已启用的资讯源被跳过</strong>
+      <ul>
+        <li v-for="item in degraded" :key="item.id">{{ item.name }}：{{ item.reason }}</li>
+      </ul>
+      <p>
+        影响范围：本页只展示仍可用的 CORS 资讯源；若全部被跳过，资讯为空，分析中的事件驱动分项按中性 50 分处理。
+        不会填充模拟资讯，也不会因缺少代理导致整页失败。
+      </p>
+    </div>
 
     <p v-if="loading" class="hint-text">正在聚合已启用的新闻源…</p>
     <template v-else>
@@ -182,6 +197,26 @@ const visible = computed(() => (props.compact ? props.news.slice(0, 2) : props.n
   margin-top: 8px;
   font-size: 12px;
   color: #b42318;
+}
+
+.news-degraded {
+  margin: 4px 0 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(224, 166, 60, 0.45);
+  border-radius: 10px;
+  background: rgba(224, 166, 60, 0.1);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.news-degraded ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+
+.news-degraded p {
+  margin: 4px 0 0;
+  color: #64748b;
 }
 
 .tone-up {

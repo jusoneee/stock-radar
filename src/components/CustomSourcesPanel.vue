@@ -11,10 +11,13 @@ import {
   type CustomSourceKind,
 } from '@/adapters/custom/types'
 import { testCustomSource } from '@/adapters/custom/runtime'
+import { PROXY_AVAILABLE } from '@/adapters/availability'
 import { useCustomSourcesStore } from '@/stores/custom-sources'
 
 const store = useCustomSourcesStore()
 store.init()
+
+const staticMode = !PROXY_AVAILABLE
 
 const form = reactive({
   name: '',
@@ -156,6 +159,10 @@ function errorTone(result: ConnectionTestResult): string {
       勾选「经本地代理」时请求会发往 <code>/api/custom</code>，由服务端按 <code>CUSTOM_SOURCE_ALLOWLIST</code>
       校验域名与路径前缀，代理不会透传任何自定义 Header（Authorization 仅支持直连）。
     </p>
+    <p v-if="staticMode" class="inline-warn">
+      纯静态部署能力边界：当前构建不含 <code>/api/custom</code> 代理，自定义数据源<strong>只支持浏览器可直接访问（CORS 可达）的
+      http(s) 地址</strong>；「经本地代理」选项已禁用。未开启 CORS 的接口会在测试连接时明确失败并给出原因，不会伪造数据。
+    </p>
 
     <div v-if="store.sources.length > 0" class="source-list">
       <article v-for="item in store.sources" :key="item.id" class="source-row">
@@ -165,7 +172,9 @@ function errorTone(result: ConnectionTestResult): string {
             <span class="tag" :class="item.kind === 'quote' ? 'tag-quote' : 'tag-news'">
               {{ item.kind === 'quote' ? '行情' : '资讯' }}
             </span>
+            <span v-if="item.viaProxy && staticMode" class="tag tag-key">代理不可用</span>
             <span class="muted">{{ item.method }} · {{ item.timeoutMs }}ms{{ item.viaProxy ? ' · 代理' : '' }}</span>
+
           </div>
           <code class="source-url">{{ item.urlTemplate }}</code>
           <div class="source-controls">
@@ -246,8 +255,8 @@ function errorTone(result: ConnectionTestResult): string {
             <input v-model="token" type="password" autocomplete="off" placeholder="直连时作为 Bearer" />
           </label>
           <label class="policy-field check-field">
-            <span>经本地代理（CORS 受限时）</span>
-            <input v-model="form.viaProxy" type="checkbox" />
+            <span>经本地代理（CORS 受限时）{{ staticMode ? '· 纯静态不可用' : '' }}</span>
+            <input v-model="form.viaProxy" type="checkbox" :disabled="staticMode" />
           </label>
           <label v-if="form.method === 'POST'" class="policy-field wide">
             <span>POST JSON 模板</span>

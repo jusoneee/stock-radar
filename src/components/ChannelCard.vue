@@ -7,6 +7,9 @@ const props = defineProps<{
   weight: number
   apiKey: string
   normalizedWeight: number
+  /** False when this deployment cannot reach the provider (e.g. proxy-only in static builds). */
+  available?: boolean
+  unavailableReason?: string
 }>()
 
 const emit = defineEmits<{
@@ -16,6 +19,7 @@ const emit = defineEmits<{
 }>()
 
 function onToggle(): void {
+  if (props.available === false) return
   emit('update:enabled', !props.enabled)
 }
 
@@ -29,7 +33,7 @@ function onKey(event: Event): void {
 </script>
 
 <template>
-  <article class="channel-card" :class="{ 'is-off': !enabled }">
+  <article class="channel-card" :class="{ 'is-off': !enabled || available === false }">
     <header class="channel-head">
       <div>
         <h3>{{ meta.name }}</h3>
@@ -38,8 +42,9 @@ function onKey(event: Event): void {
       <button
         type="button"
         class="switch"
-        :class="{ 'is-on': enabled }"
-        :aria-pressed="enabled"
+        :class="{ 'is-on': enabled && available !== false }"
+        :aria-pressed="enabled && available !== false"
+        :disabled="available === false"
         @click="onToggle"
       >
         <span />
@@ -55,8 +60,10 @@ function onKey(event: Event): void {
       <span v-if="meta.simulated" class="tag tag-mock">模拟数据</span>
       <span v-else class="tag tag-live">真实数据</span>
       <span v-if="meta.requiresKey" class="tag tag-key">需密钥</span>
+      <span v-if="available === false" class="tag tag-key">纯静态不可用</span>
     </div>
-    <p v-if="meta.rateLimit" class="channel-rate">{{ meta.rateLimit }}</p>
+    <p v-if="available === false && unavailableReason" class="channel-rate">{{ unavailableReason }}</p>
+    <p v-else-if="meta.rateLimit" class="channel-rate">{{ meta.rateLimit }}</p>
 
     <div class="weight-row">
       <label :for="`weight-${meta.id}`">权重</label>
@@ -67,7 +74,7 @@ function onKey(event: Event): void {
         max="1"
         step="0.05"
         :value="weight"
-        :disabled="!enabled"
+        :disabled="!enabled || available === false"
         @input="onWeight"
       />
       <span class="weight-value">{{ weight.toFixed(2) }}</span>

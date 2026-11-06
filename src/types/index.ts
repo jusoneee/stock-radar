@@ -21,6 +21,8 @@ export interface ChannelMeta {
   latencyMs: number
   /** True while the channel returns generated demo data instead of live data. */
   simulated: boolean
+  /** True when the provider must be reached through the same-origin `/api/*` proxy. */
+  requiresProxy?: boolean
   /** Human readable rate-limit note for live providers (e.g. "≤2 req/s"). */
   rateLimit?: string
 }

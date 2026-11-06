@@ -2,11 +2,12 @@ import type { ChannelMeta, QuoteBar, QuoteSnapshot, RawNewsItem } from '@/types'
 import { AdapterError, type AdapterContext, type NewsAdapter, type QuoteAdapter } from '@/adapters/types'
 import { mapWithConcurrency } from '@/lib/concurrency'
 import { safeExternalUrl } from '@/lib/url'
+import { PROXY_AVAILABLE } from '@/adapters/availability'
 import type { ConnectionTestResult, CustomSourceConfig } from './types'
 import { resolvePath, toDateKey, toIsoTime, toNumber, toText } from './resolve'
 
 const CORS_HINT =
-  '直连失败常见原因是目标接口未开启 CORS。可以勾选「经本地代理」并在 server/proxy.mjs 的白名单中登记该域名，或改用支持 CORS 的接口。'
+  '浏览器直连要求目标接口返回 CORS 响应头。纯静态部署不含 /api/custom 代理，只能使用 CORS 可达的地址；自建部署可勾选「经本地代理」并在 server/proxy.mjs 的白名单中登记该域名。'
 
 interface RawResponse {
   status: number
@@ -35,6 +36,15 @@ async function requestJson(
   symbol: string,
   token: string,
 ): Promise<RawResponse> {
+  // Static deployments have no /api/custom proxy; fail explicitly instead of
+  // issuing a request that would only return a 404 HTML page.
+  if (config.viaProxy && !PROXY_AVAILABLE) {
+    throw new CustomRequestError(
+      'PROXY',
+      '当前为纯静态部署，不含 /api/custom 代理；自定义源仅支持 CORS 可达的 http(s) 地址。',
+      0,
+    )
+  }
   const url = requestUrl(config, symbol)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), Math.max(2_000, config.timeoutMs))

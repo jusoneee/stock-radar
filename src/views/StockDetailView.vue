@@ -7,6 +7,7 @@ import { fetchCompanyProfile } from '@/adapters/profile/eastmoney'
 import { loadQuoteSeries, loadStockNews } from '@/services/stock-data'
 import { useWatchlistStore } from '@/stores/watchlist'
 import { useUniverseStore } from '@/stores/universe'
+import { useChannelsStore } from '@/stores/channels'
 import { useCompareStore, MAX_COMPARE } from '@/stores/compare'
 import KlineChart from '@/components/KlineChart.vue'
 import ForecastPanel from '@/components/ForecastPanel.vue'
@@ -16,6 +17,7 @@ import { formatAmount, formatDateTime, formatPercent, formatPrice } from '@/lib/
 const route = useRoute()
 const watchlist = useWatchlistStore()
 const universe = useUniverseStore()
+const channels = useChannelsStore()
 const compare = useCompareStore()
 watchlist.init()
 universe.init()
@@ -268,6 +270,7 @@ watch(symbol, load)
           :raw-count="rawNewsCount"
           :failed="failedNews"
           :loading="newsLoading"
+          :degraded="channels.unavailableNews"
         />
       </div>
 
