@@ -381,8 +381,14 @@ const server = createServer(async (req, res) => {
   proxyReq.end()
 })
 
-server.listen(PORT, () => {
-  console.log(`[stock-radar] proxy listening on http://localhost:${PORT}`)
-  console.log(`[stock-radar] allowed origins: ${ALLOWED_ORIGINS.join(', ')}`)
-  console.log(`[stock-radar] tushare server token: ${TUSHARE_TOKEN ? 'configured' : 'not set'}`)
-})
+export { customUpstream, safeResponseHeaders, FORWARDED_RESPONSE_HEADERS }
+
+// Only start listening when executed directly, so tests can import the helpers.
+const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false
+if (isMain) {
+  server.listen(PORT, () => {
+    console.log(`[stock-radar] proxy listening on http://localhost:${PORT}`)
+    console.log(`[stock-radar] allowed origins: ${ALLOWED_ORIGINS.join(', ')}`)
+    console.log(`[stock-radar] tushare server token: ${TUSHARE_TOKEN ? 'configured' : 'not set'}`)
+  })
+}
