@@ -19,7 +19,7 @@ Stock Radar 把两件通常割裂的事情放在同一个决策流程里：
 
 ```bash
 npm install      # 安装依赖
-npm run dev      # 本地开发：http://localhost:5173
+npm run dev      # 本地开发：http://localhost:5173/stock-radar/（base 与 Pages 一致）
 npm run build    # 类型检查 + 生产构建（产物在 dist/）
 npm run preview  # 预览构建产物
 npm test         # vitest 单元测试（64 条）

@@ -17,7 +17,7 @@ cd stock-radar
 # 2. 安装依赖
 npm install
 
-# 3. 开发模式（默认 http://localhost:5173）
+# 3. 开发模式（默认 http://localhost:5173/stock-radar/，base 与 Pages 一致）
 npm run dev
 
 # 4. 类型检查 + 生产构建，产物在 dist/
