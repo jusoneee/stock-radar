@@ -14,6 +14,9 @@ import vue from '@vitejs/plugin-vue'
  * - api.tushare.pro -> optional POST proxy for users who provide a token.
  */
 export default defineConfig({
+  // GitHub Pages serves project sites from https://<user>.github.io/<repo>/.
+  // Self-hosted proxy deployments can override with `VITE_BASE_PATH=/`.
+  base: process.env.VITE_BASE_PATH ?? '/stock-radar/',
   plugins: [vue()],
   resolve: {
     alias: {

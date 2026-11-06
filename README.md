@@ -1,7 +1,8 @@
 # Stock Radar · A股行情与新闻事件雷达
 
 > A股行情与新闻事件驱动的选股分析工具（可本地运行的功能版）。
-> 当前版本已接入**真实公开接口**：东方财富全市场列表（含北交所）、东方财富/腾讯/新浪日 K 与快照、新浪财经滚动资讯、东方财富 F10 公司资料；Tushare / AKShare / 财联社 / LLM 保留配置位并显式标注未启用（不伪造数据）。模拟适配器保留为离线兜底（`meta.simulated = true`）。分析标的由用户可维护的**自选池**决定（最多 50 只，本地持久化）。
+> **默认构建为纯静态应用**：无需后端即可直接发布到 GitHub Pages，数据持久化在浏览器 IndexedDB / localStorage。
+> 当前版本已接入**真实公开接口**：东方财富全市场列表（含北交所）、东方财富/腾讯/新浪日 K 与快照、新浪财经滚动资讯、东方财富 F10 公司资料；Tushare / AKShare / 财联社 / LLM 保留配置位并显式标注未启用（不伪造数据）。纯静态部署下依赖代理的渠道（新浪行情/资讯、Tushare、AKShare）会自动跳过并给出原因。模拟适配器保留为离线兜底（`meta.simulated = true`）。分析标的由用户可维护的**自选池**决定（最多 50 只，本地持久化）。
 >
 > 2026-11 新增：**自定义数据源**（保存前强制测试连接、字段映射、代理白名单）、**个股详情页**、**2~6 只多股对比**、**统计趋势预测**（线性回归 + EMA/动量 + 波动率区间，附 walk-forward 误差与免责声明）、**收藏与多选预览**、**公司资料 + 个股舆情**、手机/平板/桌面三档响应式与 PWA manifest。
 
@@ -21,9 +22,11 @@ npm install      # 安装依赖
 npm run dev      # 本地开发：http://localhost:5173
 npm run build    # 类型检查 + 生产构建（产物在 dist/）
 npm run preview  # 预览构建产物
-npm test         # vitest 单元测试（43 条）
-npm run proxy    # 可选：零依赖生产代理 + 托管 dist/（默认 8787）
+npm test         # vitest 单元测试（64 条）
+npm run proxy    # 可选：零依赖生产代理 + 托管 dist/（默认 8787；纯静态部署不需要）
 ```
+
+纯静态部署（GitHub Pages）见 [纯静态部署说明](docs/06-static-deployment.md)：仓库已内置 `base: '/stock-radar/'`、`public/.nojekyll` 与 `.github/workflows/deploy-pages.yml`；在 **Settings → Pages → Source** 选择 **GitHub Actions** 即可发布。
 
 环境要求：Node.js ≥ 18（开发环境实测 Node 26 / npm 11）。
 
@@ -84,7 +87,7 @@ npm run proxy    # 可选：零依赖生产代理 + 托管 dist/（默认 8787�
 │   ├── stores/               # Pinia：渠道配置、自选池、收藏、对比、自定义源、全市场缓存、分析运行、评分权重、快照
 │   ├── router/               # 路由
 │   ├── types/                # 全局领域模型
-│   ├── lib/                  # 格式化、交易日历、并发、市场前缀、导出、合规版本
+│   ├── lib/                  # 格式化、交易日历、并发、市场前缀、导出、合规版本、存储适配器
 │   └── styles/               # 主题样式（含三档响应式与触控尺寸）
 ├── index.html
 ├── package.json
@@ -116,14 +119,14 @@ npm run proxy    # 可选：零依赖生产代理 + 托管 dist/（默认 8787�
 | `cls-news` 财联社 | 签约授权与 Key | 无 Key 抛 `MISSING_KEY`；未公开协议，有 Key 也不猜测接口 |
 | AI 增强（LLM） | API Key + 服务地址 | `/channels` 提供配置位，默认关闭；规则兜底为主路径 |
 
-> 东方财富搜索建议接口 `searchapi.eastmoney.com/api/suggest/get` 实测返回 200 且结构可用（含 `PinYin`），但**不带 CORS 头**，因此本项目不做远程联想搜索，改为全市场列表落地到 localStorage 后本地模糊匹配（代码/名称）。
+> 东方财富搜索建议接口 `searchapi.eastmoney.com/api/suggest/get` 实测返回 200 且结构可用（含 `PinYin`），但**不带 CORS 头**，因此本项目不做远程联想搜索，改为全市场列表落地到 IndexedDB 后本地模糊匹配（代码/名称）。
 
 ### 全市场列表与本地缓存
 
 - **分页**：接口单页上限 100 条（传 `pz=2000` 仍只返回 100），全市场约 5927 条（沪深 5563 + 北交所 364）需约 60 页；适配器合并首页与其余分页，按 6 位代码去重并按代码排序。
 - **行业与状态**：`f100` 作为行业字段；`f2` 为 `-` 判停牌，名称 `/^\*?ST/` 判 ST，页面与风险提示同步展示。
 - **风控**：分页请求并发上限 3，每请求前置 150ms 间隔；任何一页失败即整体报错并提示失败页号，不返回残缺列表。
-- **缓存**：`localStorage` 键 `stock-radar:universe:v1`，带 `expiresAt`（下一个交易日 09:30）；过期后进入「自选池」页会重新抓取，过期数据仍可查看但明确标注「缓存已过期」。
+- **缓存**：IndexedDB 键 `stock-radar:universe:v1`，带 `expiresAt`（下一个交易日 09:30）；过期后进入「自选池」页会重新抓取，过期数据仍可查看但明确标注「缓存已过期」。IndexedDB 不可用时回退到 localStorage，并在页面顶部提示。
 - **失败可见**：列表加载失败时页面展示错误与「重试」，搜索框禁用；**不会**退回模拟列表。
 
 ### 交易日历与数据新鲜度
@@ -134,7 +137,7 @@ npm run proxy    # 可选：零依赖生产代理 + 托管 dist/（默认 8787�
 
 ### 自选池
 
-- 位置：`/watchlist`；`localStorage` 键 `stock-radar:watchlist:v1`（保存 `{ items, sortMode }`）。
+- 位置：`/watchlist`；IndexedDB 键 `stock-radar:watchlist:v1`（保存 `{ items, sortMode }`）。旧 localStorage 数据会在首次启动时迁移，迁移失败保留原数据并提示。
 - 能力：代码/名称模糊搜索新增、分组（默认「未分组」）、排序（手动顺序 / 名称 / 代码 / 添加时间）、上/下移、单个删除、清空、恢复默认（10 只）、上限 **50 只**；空池时分析页给出明确空状态，引擎也会拒绝运行。
 - 首次升级会从旧版渠道配置中的 `symbols` 迁移一次；写入失败（配额）不影响本次会话使用。
 
@@ -223,10 +226,10 @@ npm test            # vitest：指标 / 趋势 5 状态 / 评分权重 / 事件 
 npm run build       # 类型检查 + 生产构建
 ```
 
-- 单测覆盖：`tests/indicators.spec.ts`、`tests/trend.spec.ts`、`tests/scoring.spec.ts`、`tests/news.spec.ts`（55 条手标样本）、`tests/calendar.spec.ts`、`tests/adapters.spec.ts`、`tests/forecast.spec.ts`（样本不足拒绝 / 趋势方向 / walk-forward 指标）、`tests/custom-source.spec.ts`（路径解析 / 测试连接成功与失败）。共 43 条，全部通过。
+- 单测覆盖：`tests/indicators.spec.ts`、`tests/trend.spec.ts`、`tests/scoring.spec.ts`、`tests/news.spec.ts`（55 条手标样本）、`tests/calendar.spec.ts`、`tests/adapters.spec.ts`、`tests/forecast.spec.ts`（样本不足拒绝 / 趋势方向 / walk-forward 指标）、`tests/custom-source.spec.ts`（路径解析 / 测试连接成功与失败）、`tests/storage.spec.ts`（旧数据迁移成功/失败保留/不覆盖/适配器切换）与渠道静态可用性。共 64 条，全部通过。
 - 多端冒烟（本机 CDP 脚本）：375 / 390 / 768 / 1024 / 1280 / 1440 六档宽度 × 仪表盘 / 个股详情 / 多股对比 / 自选池 / 分析结果五页，共 30 次页面加载；检查横向溢出、触控目标、导航折叠与控制台错误。截图仅保存在临时目录，不入库。
-- 生产部署（可选网关）：`npm run build && PORT=8787 ALLOWED_ORIGIN=https://your-domain npm run proxy`。代理会转发 `/api/sina`、`/api/sina-kline`、`/api/sina-hq`、`/api/tushare`，自带 40 次/分钟限流、CORS 白名单与 `dist/` 静态托管；`TUSHARE_TOKEN` 仅从环境变量读取并服务端注入。
-- 纯静态部署：行情与全市场列表可直连；新浪三个接口需同域反向代理（Vite 开发环境已内置）。
+- 纯静态部署（默认）：`npm run build` 后将 `dist/` 发布到 GitHub Pages。仓库已配置 `base: '/stock-radar/'`、`public/.nojekyll` 和 `.github/workflows/deploy-pages.yml`；启用步骤见 [纯静态部署说明](docs/06-static-deployment.md)。
+- 可选代理网关：`npm run build && PORT=8787 ALLOWED_ORIGIN=https://your-domain npm run proxy`；需启用新浪/Tushare 渠道时用 `VITE_PROXY_AVAILABLE=true npm run build`。代理会转发 `/api/sina`、`/api/sina-kline`、`/api/sina-hq`、`/api/tushare`、`/api/custom`，自带 40 次/分钟限流、CORS 白名单与 `dist/` 静态托管；`TUSHARE_TOKEN` 仅从环境变量读取并服务端注入。
 - 浏览器冒烟（本机脚本）：自选池加载 → 分组/排序 → 分析运行 → 详情 K 线 → 筛选/导出 → 保存快照 → 合规页；结果记录在交付说明中，未接入 CI 浏览器。
 
 ---
@@ -240,6 +243,7 @@ npm run build       # 类型检查 + 生产构建
 | [功能需求](docs/03-function-requirements.md) | 功能清单与优先级、验收标准、非功能需求、合规与风险声明 |
 | [TODOLIST](docs/04-todolist.md) | 分阶段可勾选任务清单（P0 已完成 / P1 / P2） |
 | [使用说明](docs/05-usage-guide.md) | 安装启动、页面操作、目录说明、如何新增数据源适配器 |
+| [纯静态部署](docs/06-static-deployment.md) | GitHub Pages 启用步骤、纯静态能力边界、存储模型、可选代理部署 |
 
 ---
 
@@ -257,7 +261,7 @@ npm run build       # 类型检查 + 生产构建
 
 - 行情为**日线级别**：日 K 取 120 根（前复权），盘中数据以最近交易日收盘 + 实时快照为准，不做分钟级回测。
 - 全市场列表覆盖沪深 + 北交所（约 5927 只）；北交所行情使用 `bj` 前缀，已接入东财/腾讯/新浪。
-- 新浪行情/资讯无 CORS 头：开发环境依赖 Vite 代理（`/api/sina*`），纯静态部署需同域反向代理（或使用 `server/proxy.mjs`），否则相关渠道显示失败（行情主源与自选池不受影响）。
+- 新浪行情/资讯无 CORS 头：默认纯静态构建会自动跳过这些渠道并在页面说明原因（不影响东财/腾讯行情与自选池）；需要时可用可选代理部署，并以 `VITE_PROXY_AVAILABLE=true` 构建。
 - 新浪行情为未复权口径，仅用于收盘价交叉校验（0.5% 阈值），不参与均线与评分计算。
 - 公开接口无官方 SLA，存在限流与字段变动风险；已内置超时、重试、响应缓存与批量并发限制，但仍建议控制刷新频率。
 - 交易日历为本地规则 + 静态节假日表，法定调休临时通知不会自动同步；请以交易所公告为准。
