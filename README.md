@@ -26,7 +26,7 @@ npm test         # vitest 单元测试（64 条）
 npm run proxy    # 可选：零依赖生产代理 + 托管 dist/（默认 8787；纯静态部署不需要）
 ```
 
-纯静态部署（GitHub Pages）见 [纯静态部署说明](docs/06-static-deployment.md)：仓库已内置 `base: '/stock-radar/'`、`public/.nojekyll` 与 `.github/workflows/deploy-pages.yml`；在 **Settings → Pages → Source** 选择 **GitHub Actions** 即可发布。
+纯静态部署（GitHub Pages）见 [纯静态部署说明](docs/06-static-deployment.md)：仓库已内置 `base: '/stock-radar/'`、`public/.nojekyll` 与 `.github/workflows/deploy-pages.yml`；在 **Settings → Pages → Source** 选择 **GitHub Actions** 即可发布。若仓库为私有且当前套餐不支持 Pages，可使用仓库内 `netlify.toml` 部署到 Netlify（免费套餐支持私有仓库），步骤同样见该文档。
 
 环境要求：Node.js ≥ 18（开发环境实测 Node 26 / npm 11）。
 

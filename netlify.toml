@@ -1,0 +1,12 @@
+# Netlify fallback for deployments where GitHub Pages is unavailable
+# (e.g. private repositories on a plan without Pages support).
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # Netlify serves the site at the domain root, so the GitHub Pages sub-path
+  # base must be reset to "/". Without this, assets would request
+  # /stock-radar/assets/... and 404 on Netlify.
+  VITE_BASE_PATH = "/"
