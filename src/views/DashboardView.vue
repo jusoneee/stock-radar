@@ -16,149 +16,107 @@ const watchlist = useWatchlistStore()
 const universe = useUniverseStore()
 
 const trading = getTradingStatus()
+const report = computed(() => analysis.report)
+const preview = computed(() => watchlist.items.slice(0, 10))
+
 const universeFreshness = computed(() => {
-  if (!universe.fetchedAt) return '尚未加载全市场列表'
-  return `${formatDateTime(universe.fetchedAt)} 更新`
+  if (!universe.fetchedAt) return '全市场列表尚未加载'
+  return `全市场列表 ${formatDateTime(universe.fetchedAt)} 更新`
 })
 
-const pipeline = [
-  { step: '01', title: '渠道选择', desc: '按行情源 / 新闻源分类，开关渠道并设置权重，配置持久化到本地。' },
-  { step: '02', title: '多源拉取', desc: '并行调用适配器，按权重合并收盘价，单渠道失败自动降级。' },
-  { step: '03', title: '双引擎分析', desc: '行情侧计算均线 / 量比 / 区间突破；新闻侧做事件抽取、情绪与阶段判定。' },
-  { step: '04', title: '推荐输出', desc: '趋势 + 事件共振打分，输出候选列表、买卖时机参考与风险提示。' },
-]
-
-const modules = [
-  {
-    title: '行情趋势分析',
-    tag: 'quote engine',
-    points: [
-      'MA5 / MA10 / MA20 均线结构与 5 日动量',
-      '量比与 20 日区间位置，识别放量突破',
-      '趋势状态机：强势上行 / 温和上行 / 震荡 / 回调 / 下行',
-    ],
-  },
-  {
-    title: '新闻事件分析',
-    tag: 'news engine',
-    points: [
-      '规则化事件抽取：政策、业绩、订单、并购、风险等',
-      '情绪标签与个股映射（显式代码优先，其次名称匹配）',
-      '事件生命周期：发酵 → 确认 → 衰退，并给出时机参考',
-    ],
-  },
-]
-
-const newsChannelCount = computed(() => channels.newsCatalog.length)
-const quoteChannelCount = computed(() => channels.quoteCatalog.length)
+async function run(): Promise<void> {
+  await analysis.run()
+  if (!analysis.error) await router.push('/analysis')
+}
 </script>
 
 <template>
   <section class="page">
-    <div class="hero card">
-      <div class="hero-copy">
-        <span class="eyebrow">LIVE PUBLIC DATA · 自选池驱动</span>
-        <h1>把「行情趋势」和「新闻事件」放在同一张雷达图上</h1>
+    <header class="page-head">
+      <div>
+        <h1>概览</h1>
         <p>
-          选择你信任的信息渠道，Stock Radar 会并行拉取行情与新闻，先判断个股处于什么趋势，再推断事件处于
-          发酵 / 确认 / 衰退 哪个阶段，最后给出可解释的候选清单与时机参考。
+          {{ trading.latestTradingDay }} · {{ trading.phaseLabel }} · 自选 {{ watchlist.count }} 只 ·
+          {{ report ? `最近分析 ${formatDateTime(report.generatedAt)}` : '尚未运行分析' }}
         </p>
-        <div class="hero-actions">
-          <button class="btn btn-primary" @click="router.push('/channels')">配置数据源</button>
-          <button class="btn btn-ghost" @click="router.push('/analysis')">查看分析结果</button>
-        </div>
       </div>
-      <div class="hero-panel">
-        <p class="hero-panel-title">当前配置</p>
-        <dl>
-          <div><dt>行情渠道</dt><dd>{{ channels.quoteSettings.length }} / {{ quoteChannelCount }}</dd></div>
-          <div><dt>新闻渠道</dt><dd>{{ channels.newsSettings.length }} / {{ newsChannelCount }}</dd></div>
-          <div><dt>自选池</dt><dd>{{ watchlist.count }} 只</dd></div>
-          <div><dt>市场状态</dt><dd>{{ trading.latestTradingDay }} · {{ trading.phaseLabel }}</dd></div>
-          <div><dt>最近分析</dt><dd>{{ analysis.report ? '已生成' : '尚未运行' }}</dd></div>
-        </dl>
-        <button class="btn btn-secondary full" :disabled="analysis.loading" @click="analysis.run()">
-          {{ analysis.loading ? '正在拉取与分析…' : '立即运行一次' }}
+      <div class="page-head-actions">
+        <RouterLink to="/watchlist" class="btn btn-ghost">管理自选</RouterLink>
+        <button class="btn btn-primary" :disabled="analysis.loading" @click="run">
+          {{ analysis.loading ? '正在分析…' : '运行分析' }}
         </button>
-        <p v-if="analysis.error" class="inline-error">{{ analysis.error }}</p>
       </div>
-    </div>
+    </header>
+
+    <p v-if="analysis.error" class="banner-error">{{ analysis.error }}</p>
 
     <div class="stat-grid">
-      <StatTile label="启用渠道" :value="channels.enabledCount" hint="可在数据源页随时调整" tone="neutral" />
-      <StatTile label="覆盖标的" :value="watchlist.count" hint="自选池（最多 50 只）" tone="neutral" />
+      <StatTile label="启用渠道" :value="channels.enabledCount" hint="行情源 + 新闻源" tone="neutral" />
+      <StatTile label="覆盖标的" :value="watchlist.count" hint="自选池上限 50 只" tone="neutral" />
       <StatTile
         label="最高评分"
-        :value="analysis.report ? analysis.topScore.toFixed(1) : '—'"
-        hint="趋势 40% + 事件 15% 等加权"
-        tone="up"
+        :value="report ? analysis.topScore.toFixed(1) : '暂无'"
+        hint="趋势 + 事件加权"
+        :tone="report ? 'up' : 'neutral'"
       />
       <StatTile
         label="事件条数"
-        :value="analysis.report ? analysis.report.news.length : '—'"
+        :value="report ? report.news.length : '暂无'"
         hint="去重后的新闻事件"
-        tone="warn"
+        :tone="report && report.news.length > 0 ? 'warn' : 'neutral'"
       />
     </div>
 
     <div class="card">
       <header class="card-head">
-        <h2>分析流水线</h2>
-        <span class="tag">adapters → analysis → stores → views</span>
-      </header>
-      <div class="pipeline">
-        <div v-for="item in pipeline" :key="item.step" class="pipeline-step">
-          <span class="step-index">{{ item.step }}</span>
-          <h3>{{ item.title }}</h3>
-          <p>{{ item.desc }}</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="grid-2">
-      <div v-for="module in modules" :key="module.title" class="card">
-        <header class="card-head">
-          <h2>{{ module.title }}</h2>
-          <span class="tag">{{ module.tag }}</span>
-        </header>
-        <ul class="bullet-list">
-          <li v-for="point in module.points" :key="point">{{ point }}</li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="card">
-      <header class="card-head">
-        <h2>自选池</h2>
+        <h2>自选速览 <span class="muted">{{ watchlist.count }} 只</span></h2>
         <div class="card-head-actions">
-          <span class="tag">{{ watchlist.count }} 只 · 本地持久化</span>
-          <RouterLink to="/watchlist" class="btn btn-mini">管理自选池</RouterLink>
+          <RouterLink v-if="!watchlist.isEmpty" to="/analysis" class="btn btn-mini">查看分析</RouterLink>
+          <RouterLink to="/watchlist" class="btn btn-mini">管理</RouterLink>
         </div>
       </header>
+
       <div v-if="watchlist.isEmpty" class="empty-state compact">
         <h3>自选池为空</h3>
-        <p>到「自选池」页面搜索全市场并添加标的，或恢复默认的 10 只演示股票。</p>
-        <RouterLink to="/watchlist" class="btn btn-primary">去添加股票</RouterLink>
-      </div>
-      <div v-else class="stock-pool">
-        <div v-for="stock in watchlist.items" :key="stock.symbol" class="pool-item">
-          <strong>{{ stock.name }}</strong>
-          <span>{{ stock.symbol }} · {{ stock.market === 'SH' ? '沪市' : '深市' }}</span>
+        <p>分析以自选池为输入，先添加至少一只股票，再运行分析。</p>
+        <div class="empty-actions">
+          <RouterLink to="/watchlist" class="btn btn-primary">去添加股票</RouterLink>
+          <RouterLink to="/settings" class="btn btn-ghost">检查数据源</RouterLink>
         </div>
       </div>
+      <div v-else class="stock-pool">
+        <RouterLink
+          v-for="stock in preview"
+          :key="stock.symbol"
+          :to="`/stock/${stock.symbol}?from=watchlist`"
+          class="pool-item"
+        >
+          <strong>{{ stock.name }}</strong>
+          <span>{{ stock.symbol }} · {{ stock.market === 'SH' ? '沪市' : '深市' }}</span>
+        </RouterLink>
+      </div>
+      <p v-if="!watchlist.isEmpty && watchlist.count > preview.length" class="hint-text">
+        仅展示前 {{ preview.length }} 只，完整列表见「自选」。
+      </p>
       <p class="hint-text">
-        全市场列表：{{ universe.count ? `${universe.count} 只` : '未加载' }} · {{ universeFreshness }}
-        <template v-if="universe.isStale && universe.count">（缓存已过期，进入自选池页可刷新）</template>
+        {{ universeFreshness }}<template v-if="universe.isStale && universe.count">（缓存已过期，可在自选页刷新）</template>
       </p>
     </div>
 
-    <div class="notice">
-      <strong>合规声明</strong>
-      <p>
-        行情与资讯来自东方财富、腾讯证券、新浪财经等公开接口，可能存在延迟、限流或字段变更；
-        评分与时机参考均为规则化分析结论，<strong>不构成投资建议</strong>。
-        请确认数据源授权范围，并遵守《证券法》及交易所信息披露相关规定。
-      </p>
-    </div>
+    <details class="section-collapse">
+      <summary>工作方式与评分口径</summary>
+      <div class="collapse-body">
+        <ol class="flow-list">
+          <li><b>1</b><span><strong>选渠道</strong> · 在设置中启用行情源与新闻源，并按可靠度分配权重。</span></li>
+          <li><b>2</b><span><strong>拉数据</strong> · 并行请求各渠道，单渠道失败自动降级，收盘价按权重合并。</span></li>
+          <li><b>3</b><span><strong>算指标</strong> · 均线结构、动量、量比、区间位置，以及新闻事件、情绪与阶段。</span></li>
+          <li><b>4</b><span><strong>出结果</strong> · 趋势与事件加权打分，输出候选列表、时机参考和风险提示。</span></li>
+        </ol>
+        <p class="hint-text">
+          评分只影响候选排序，不改变指标与事件判定；所有结论可在「分析」页逐项展开。行情与资讯来自第三方公开接口，
+          不构成任何投资建议。
+        </p>
+      </div>
+    </details>
   </section>
 </template>

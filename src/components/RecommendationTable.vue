@@ -6,15 +6,22 @@ import { RouterLink } from 'vue-router'
 import TrendBadge from './TrendBadge.vue'
 import Sparkline from './Sparkline.vue'
 
-defineProps<{
+const props = defineProps<{
   items: Recommendation[]
   selectedSymbol?: string
+  /** Which top-level menu the user came from, used to highlight nav on the detail page. */
+  from?: string
 }>()
 
 const emit = defineEmits<{ (event: 'select', symbol: string): void }>()
 
 function symbolText(symbol: string): string {
   return `${marketOfSymbol(symbol)}${symbol}`
+}
+
+function detailTarget(symbol: string): { path: string; query?: Record<string, string> } {
+  const path = `/stock/${symbol}`
+  return props.from ? { path, query: { from: props.from } } : { path }
 }
 </script>
 
@@ -44,15 +51,17 @@ function symbolText(symbol: string): string {
           <td>
             <div class="stock-cell">
               <strong>{{ item.name }}</strong>
-              <span>{{ symbolText(item.symbol) }} · {{ item.sector }}</span>
-              <RouterLink
-                :to="`/stock/${item.symbol}`"
-                class="stock-detail-link"
-                :aria-label="`查看 ${item.name} 的个股详情`"
-                @click.stop
-              >
-                详情
-              </RouterLink>
+              <span>
+                {{ symbolText(item.symbol) }} · {{ item.sector }}
+                <RouterLink
+                  :to="detailTarget(item.symbol)"
+                  class="stock-detail-link"
+                  :aria-label="`查看 ${item.name} 的个股详情`"
+                  @click.stop
+                >
+                  详情
+                </RouterLink>
+              </span>
             </div>
           </td>
           <td class="num">{{ formatPrice(item.indicators.lastClose) }}</td>
@@ -79,13 +88,11 @@ function symbolText(symbol: string): string {
 
 <style scoped>
 .stock-detail-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  margin-top: 2px;
-  color: #7fb6ff;
-  font-size: 12px;
+  margin-left: 2px;
+  color: var(--accent);
+  font-size: 11px;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .stock-detail-link:hover {

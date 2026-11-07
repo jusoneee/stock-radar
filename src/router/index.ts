@@ -7,19 +7,19 @@ const router = createRouter({
       path: '/',
       name: 'dashboard',
       component: () => import('@/views/DashboardView.vue'),
-      meta: { title: '仪表盘' },
+      meta: { title: '概览' },
     },
     {
       path: '/watchlist',
       name: 'watchlist',
       component: () => import('@/views/WatchlistView.vue'),
-      meta: { title: '自选池' },
+      meta: { title: '自选' },
     },
     {
       path: '/compare',
       name: 'compare',
       component: () => import('@/views/CompareView.vue'),
-      meta: { title: '多股对比' },
+      meta: { title: '对比' },
     },
     {
       path: '/stock/:symbol',
@@ -28,16 +28,21 @@ const router = createRouter({
       meta: { title: '个股详情' },
     },
     {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('@/views/SettingsView.vue'),
+      meta: { title: '设置' },
+    },
+    {
+      // Old links/README references keep working.
       path: '/channels',
-      name: 'channels',
-      component: () => import('@/views/ChannelsView.vue'),
-      meta: { title: '数据源配置' },
+      redirect: '/settings',
     },
     {
       path: '/analysis',
       name: 'analysis',
       component: () => import('@/views/AnalysisView.vue'),
-      meta: { title: '分析结果' },
+      meta: { title: '分析' },
     },
     {
       path: '/legal/:doc',

@@ -161,12 +161,12 @@ function formatValue(value: number): string {
   width: 100%;
   height: auto;
   display: block;
-  background: #0f1420;
+  background: var(--surface-2);
   border-radius: 10px;
 }
 
 .grid {
-  stroke: #263043;
+  stroke: var(--border);
   stroke-width: 1;
 }
 
@@ -177,12 +177,12 @@ function formatValue(value: number): string {
 }
 
 .axis {
-  fill: #7c889e;
+  fill: var(--muted);
   font-size: 11px;
 }
 
 .line-empty {
-  color: #7c889e;
+  color: var(--muted);
   font-size: 13px;
 }
 
@@ -192,7 +192,7 @@ function formatValue(value: number): string {
   gap: 12px;
   margin-top: 8px;
   font-size: 12px;
-  color: #7c889e;
+  color: var(--muted);
 }
 
 .legend-item {

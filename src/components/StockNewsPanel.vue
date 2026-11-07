@@ -129,12 +129,12 @@ const degraded = computed(() => props.degraded ?? [])
   padding: 14px;
   border-radius: 10px;
   background: var(--surface-2, #f8fafc);
-  color: #475569;
+  color: var(--text-soft);
   font-size: 13px;
 }
 
 .news-empty strong {
-  color: #0f172a;
+  color: var(--text);
 }
 
 .sentiment-row,
@@ -149,17 +149,17 @@ const degraded = computed(() => props.degraded ?? [])
   padding: 3px 10px;
   border-radius: 999px;
   font-size: 12px;
-  background: #f1f5f9;
+  background: var(--surface-2);
 }
 
 .latest {
   margin: 8px 0;
   padding: 8px 10px;
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--surface-2);
   font-size: 13px;
   line-height: 1.6;
-  color: #334155;
+  color: var(--text-soft);
 }
 
 .news-list {
@@ -190,21 +190,21 @@ const degraded = computed(() => props.degraded ?? [])
 .news-meta {
   margin: 2px 0 0;
   font-size: 11px;
-  color: #7c889e;
+  color: var(--muted);
 }
 
 .source-fail {
   margin-top: 8px;
   font-size: 12px;
-  color: #b42318;
+  color: var(--up);
 }
 
 .news-degraded {
   margin: 4px 0 10px;
   padding: 10px 12px;
-  border: 1px solid rgba(224, 166, 60, 0.45);
+  border: 1px solid rgba(217, 161, 59, 0.4);
   border-radius: 10px;
-  background: rgba(224, 166, 60, 0.1);
+  background: rgba(217, 161, 59, 0.08);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -216,22 +216,22 @@ const degraded = computed(() => props.degraded ?? [])
 
 .news-degraded p {
   margin: 4px 0 0;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .tone-up {
-  color: #c0392b;
+  color: var(--up);
 }
 
 .tone-down {
-  color: #0f8a55;
+  color: var(--down);
 }
 
 .tone-neutral {
-  color: #475569;
+  color: var(--text-soft);
 }
 
 .tone-warn {
-  color: #b45309;
+  color: var(--warn);
 }
 </style>

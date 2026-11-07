@@ -233,7 +233,7 @@ watch(() => props.symbols, load, { deep: true, immediate: true })
 .preview-news h3 {
   margin: 0 0 4px;
   font-size: 12px;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .preview-news ul {
@@ -246,7 +246,7 @@ watch(() => props.symbols, load, { deep: true, immediate: true })
 }
 
 .source-fail {
-  color: #b42318;
+  color: var(--up);
   margin: 4px 0 0;
 }
 
