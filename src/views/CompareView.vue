@@ -200,7 +200,7 @@ watch(symbols, load, { deep: true })
   <section class="page">
     <header class="page-head">
       <div>
-        <h1>多股对比</h1>
+        <h1>对比</h1>
         <p>2~6 只股票按共同交易日对齐，首日归一化为 100，对比区间涨跌与量能。</p>
       </div>
       <div class="page-head-actions">
@@ -237,17 +237,22 @@ watch(symbols, load, { deep: true })
         <span v-if="compare.notice" class="inline-warn">{{ compare.notice }}</span>
       </div>
       <p v-if="compare.count < MIN_COMPARE" class="hint-text">
-        至少选择 {{ MIN_COMPARE }} 只股票才能进行对比；也可在个股详情页点击「加入对比」。
+        至少选择 {{ MIN_COMPARE }} 只股票才能对比；也可在自选或个股详情页加入对比。
       </p>
     </div>
 
     <p v-if="loading" class="hint-text">正在加载 {{ compare.count }} 只股票的行情…</p>
     <p v-if="failedRows.length" class="hint-text">
-      部分标的加载失败（见下表）：{{ failedRows.map((row) => row.name || row.symbol).join('、') }}
+      部分标的加载失败：{{ failedRows.map((row) => row.name || row.symbol).join('、') }}
       <button class="btn btn-mini" :disabled="loading" @click="load">重试</button>
     </p>
 
-    <template v-if="compare.count >= MIN_COMPARE && !loading">
+    <div v-if="compare.count < MIN_COMPARE" class="card empty-state compact">
+      <h3>选择至少 2 只股票</h3>
+      <p>从上方自选列表或自选页添加标的，选满 2 只后自动加载对比走势。</p>
+    </div>
+
+    <template v-else-if="!loading">
       <div class="card">
         <header class="card-head">
           <h2>归一化走势（首日 = 100）</h2>
@@ -260,14 +265,9 @@ watch(symbols, load, { deep: true })
           aria-label="多股归一化走势对比图"
           value-suffix=""
         />
-        <p v-if="chartSummary" class="hint-text">文字摘要（首日归一化区间涨跌）：{{ chartSummary }}</p>
-        <p class="hint-text">
-          <template v-if="commonDates.length >= 2">
-            对齐区间 {{ commonDates[0] }} → {{ commonDates.at(-1) }}；缺失交易日的股票在表格中标注为数据缺失。
-          </template>
-          <template v-else>
-            所选股票没有足够的共同交易日，无法绘制归一化曲线；请查看下方表格中的缺失原因。
-          </template>
+        <p v-if="chartSummary" class="hint-text">文字摘要：{{ chartSummary }}</p>
+        <p v-if="commonDates.length >= 2" class="hint-text">
+          对齐区间 {{ commonDates[0] }} → {{ commonDates.at(-1) }}；缺失交易日的股票在表格中标注。
         </p>
       </div>
 
@@ -291,7 +291,7 @@ watch(symbols, load, { deep: true })
             <tbody>
               <tr v-for="row in rows" :key="row.symbol" :class="{ 'row-missing': row.missing }">
                 <td>
-                  <RouterLink :to="`/stock/${row.symbol}`">{{ row.name }}</RouterLink>
+                  <RouterLink :to="`/stock/${row.symbol}?from=compare`">{{ row.name }}</RouterLink>
                   <span class="muted code">{{ row.symbol }}</span>
                 </td>
                 <td>{{ row.latest !== null ? formatPrice(row.latest) : '—' }}</td>
@@ -312,16 +312,18 @@ watch(symbols, load, { deep: true })
             </tbody>
           </table>
         </div>
-        <p class="hint-text">
-          对齐口径：取所有已加载股票的共同交易日（最近 120 个），首日收盘价归一化为 100；区间涨跌与日均量能都基于同一组共同交易日，
-          方向概率则基于该股自身完整日 K（样本不足时显示「样本不足」）。
-          缺失交易日不做插值，按「数据覆盖」栏标注缺失天数；停牌、上市时间不足或数据源缺日都会表现为缺失交易日，
-          具体原因需结合交易所公告判断。
-        </p>
-        <p class="hint-text">
-          5 日方向概率来自独立统计模块（walk-forward 误差见个股详情页）。预测不构成投资建议。
-        </p>
       </div>
+
+      <details class="section-collapse">
+        <summary>对齐与预测口径</summary>
+        <div class="collapse-body">
+          <p class="hint-text">
+            取所有已加载股票的共同交易日（最近 120 个），首日收盘价归一化为 100；区间涨跌与日均量能基于同一组交易日，
+            方向概率基于该股自身完整日 K。缺失交易日不做插值，停牌、上市时间不足或数据源缺日都会表现为缺失。
+          </p>
+          <p class="hint-text">5 日方向概率来自独立统计模块，误差验证见个股详情页；预测不构成投资建议。</p>
+        </div>
+      </details>
     </template>
   </section>
 </template>
@@ -330,25 +332,30 @@ watch(symbols, load, { deep: true })
 .picker {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   margin-bottom: 10px;
 }
 
 .pick-chip {
   border: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--surface-2);
   border-radius: 999px;
-  padding: 8px 14px;
-  min-height: 44px;
-  font-size: 13px;
+  padding: 6px 12px;
+  min-height: 34px;
+  font-size: 12px;
   cursor: pointer;
-  color: inherit;
+  color: var(--text-soft);
+}
+
+.pick-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
 }
 
 .pick-chip.selected {
-  border-color: #2563eb;
-  background: #eff6ff;
-  color: #1d4ed8;
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--text);
 }
 
 .manual-row {
@@ -359,38 +366,32 @@ watch(symbols, load, { deep: true })
 }
 
 .manual-row input {
-  min-height: 44px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  min-height: 34px;
   max-width: 220px;
-}
-
-.table-wrap {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .compare-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
 .compare-table th,
 .compare-table td {
   text-align: left;
-  padding: 10px 8px;
+  padding: 9px 8px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 
 .compare-table th {
-  color: #64748b;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 11px;
 }
 
 .row-missing {
-  background: #fffbf2;
+  background: rgba(217, 161, 59, 0.05);
 }
 
 .code {
@@ -399,18 +400,23 @@ watch(symbols, load, { deep: true })
 }
 
 .up {
-  color: #c0392b;
+  color: var(--up);
 }
 
 .down {
-  color: #0f8a55;
+  color: var(--down);
 }
 
 .missing {
-  color: #b45309;
+  color: var(--warn);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
+  .pick-chip,
+  .manual-row input {
+    min-height: 44px;
+  }
+
   .compare-table th,
   .compare-table td {
     padding: 8px 6px;

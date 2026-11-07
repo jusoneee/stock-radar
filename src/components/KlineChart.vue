@@ -171,24 +171,24 @@ const layout = computed(() => {
   width: 100%;
   height: auto;
   display: block;
-  background: #0f1420;
+  background: var(--surface-2);
   border-radius: 10px;
 }
 .grid {
-  stroke: #263043;
+  stroke: var(--border);
   stroke-width: 1;
 }
 .body-up,
 .wick-up,
 .vol-up {
-  fill: #e5484d;
-  stroke: #e5484d;
+  fill: var(--up);
+  stroke: var(--up);
 }
 .body-down,
 .wick-down,
 .vol-down {
-  fill: #0f9960;
-  stroke: #0f9960;
+  fill: var(--down);
+  stroke: var(--down);
 }
 .wick-up,
 .wick-down {
@@ -212,11 +212,11 @@ const layout = computed(() => {
   stroke: #b07cff;
 }
 .axis-label {
-  fill: #7c889e;
+  fill: var(--muted);
   font-size: 11px;
 }
 .kline-empty {
-  color: #7c889e;
+  color: var(--muted);
   font-size: 13px;
 }
 .kline-legend {
@@ -225,7 +225,7 @@ const layout = computed(() => {
   gap: 12px;
   margin-top: 6px;
   font-size: 12px;
-  color: #7c889e;
+  color: var(--muted);
 }
 .legend.ma5 {
   color: #f5b544;

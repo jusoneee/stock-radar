@@ -133,7 +133,7 @@ function probability(value: number): string {
 
 .forecast-empty {
   margin: 10px 0 0;
-  color: #b42318;
+  color: var(--up);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -159,16 +159,16 @@ function probability(value: number): string {
 }
 
 .forecast-table th {
-  color: #64748b;
-  font-weight: 600;
+  color: var(--muted);
+  font-weight: 500;
 }
 
 .up {
-  color: #c0392b;
+  color: var(--up);
 }
 
 .down {
-  color: #0f8a55;
+  color: var(--down);
 }
 
 .prob-bar {
@@ -176,7 +176,7 @@ function probability(value: number): string {
   width: 54px;
   height: 6px;
   border-radius: 3px;
-  background: #e5e7eb;
+  background: rgba(255, 255, 255, 0.08);
   margin-right: 6px;
   vertical-align: middle;
   overflow: hidden;
@@ -185,14 +185,14 @@ function probability(value: number): string {
 .prob-bar i {
   display: block;
   height: 100%;
-  background: #2563eb;
+  background: var(--accent);
 }
 
 .method {
   margin: 10px 0 0;
   font-size: 12px;
   line-height: 1.6;
-  color: #475569;
+  color: var(--muted);
 }
 
 .sub-title {
@@ -203,9 +203,9 @@ function probability(value: number): string {
 .disclaimer {
   margin: 12px 0 0;
   padding: 8px 10px;
-  border-left: 3px solid #f0a020;
-  background: #fff8e6;
-  color: #7a5200;
+  border-left: 2px solid var(--warn);
+  background: rgba(217, 161, 59, 0.08);
+  color: var(--text-soft);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -219,7 +219,7 @@ function probability(value: number): string {
 }
 
 .compact-main strong {
-  color: #1d4ed8;
+  color: var(--accent);
   font-size: 16px;
 }
 </style>

@@ -305,7 +305,7 @@ function errorTone(result: ConnectionTestResult): string {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px;
-  background: var(--surface-2, #fafbfc);
+  background: var(--surface-2);
 }
 
 .source-title {
@@ -316,24 +316,24 @@ function errorTone(result: ConnectionTestResult): string {
 }
 
 .tag-quote {
-  background: #e8f1ff;
-  color: #1e4fa3;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .tag-news {
-  background: #fff4e5;
-  color: #8a5200;
+  background: rgba(217, 161, 59, 0.12);
+  color: var(--warn);
 }
 
 .source-url {
   display: block;
   margin: 6px 0;
   padding: 6px 8px;
-  background: #f3f4f6;
+  background: var(--bg);
   border-radius: 6px;
   font-size: 12px;
   word-break: break-all;
-  color: #475569;
+  color: var(--text-soft);
 }
 
 .source-controls {
@@ -348,7 +348,7 @@ function errorTone(result: ConnectionTestResult): string {
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .mini-field input[type='number'] {
@@ -366,18 +366,18 @@ function errorTone(result: ConnectionTestResult): string {
 }
 
 .test-result.test-ok {
-  color: #166534;
+  color: var(--down);
 }
 
 .test-result.test-fail {
-  color: #b42318;
+  color: var(--up);
 }
 
 .test-hint,
 .test-samples {
   display: block;
   margin-top: 4px;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .source-form-wrap {

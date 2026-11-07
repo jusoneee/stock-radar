@@ -77,19 +77,21 @@ const title = computed(() => titles[doc.value])
 
     <div v-else class="card legal-card">
       <h2>数据源清单</h2>
-      <table class="snapshot-table">
-        <thead>
-          <tr><th>数据源</th><th>用途</th><th>鉴权</th><th>限频与保护</th></tr>
-        </thead>
-        <tbody>
-          <tr v-for="source in DATA_SOURCE_NOTES" :key="source.name">
-            <td>{{ source.name }}</td>
-            <td>{{ source.scope }}</td>
-            <td>{{ source.auth }}</td>
-            <td>{{ source.limit }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table class="snapshot-table">
+          <thead>
+            <tr><th>数据源</th><th>用途</th><th>鉴权</th><th>限频与保护</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="source in DATA_SOURCE_NOTES" :key="source.name">
+              <td>{{ source.name }}</td>
+              <td>{{ source.scope }}</td>
+              <td>{{ source.auth }}</td>
+              <td>{{ source.limit }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <h2>限频与风控</h2>
       <p>
         全市场列表按页抓取并限制并发（默认 3），日 K 批量取数同样限制 3 并发并加入请求间隔；所有响应按 TTL 缓存，
@@ -107,13 +109,15 @@ const title = computed(() => titles[doc.value])
       </p>
     </div>
 
-    <div class="card legal-card">
-      <h2>文案版本记录</h2>
-      <ul>
-        <li v-for="change in COMPLIANCE_CHANGELOG" :key="change.version">
-          v{{ change.version }} · {{ change.date }}：{{ change.summary }}
-        </li>
-      </ul>
-    </div>
+    <details class="section-collapse">
+      <summary>文案版本记录</summary>
+      <div class="collapse-body legal-card">
+        <ul>
+          <li v-for="change in COMPLIANCE_CHANGELOG" :key="change.version">
+            v{{ change.version }} · {{ change.date }}：{{ change.summary }}
+          </li>
+        </ul>
+      </div>
+    </details>
   </section>
 </template>
