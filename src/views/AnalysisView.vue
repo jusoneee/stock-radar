@@ -112,11 +112,6 @@ const newsList = computed<NewsAnalysis[]>(() => {
   return all.filter((item) => item.sentiment === newsFilter.value)
 })
 
-const weightsText = computed(() => {
-  const percent = settings.weightPercent
-  return `趋势 ${percent.trend}% / 动量 ${percent.momentum}% / 量能 ${percent.volume}% / 区间 ${percent.position}% / 事件 ${percent.news}%`
-})
-
 function channelName(id: string): string {
   const custom = customSources.sources.find((item) => item.id === id)
   return CHANNEL_CATALOG.find((meta) => meta.id === id)?.name ?? custom?.name ?? id
@@ -216,7 +211,7 @@ watch(
     <header class="page-head">
       <div>
         <h1>分析</h1>
-        <p>候选按「{{ weightsText }}」加权；点击标的进入个股详情。</p>
+        <p>按趋势、动量、量能、区间与事件加权排序；点击标的查看详情。</p>
       </div>
       <div class="page-head-actions">
         <span class="chip">{{ trading.latestTradingDay }} · {{ trading.phaseLabel }}</span>
