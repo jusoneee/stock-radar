@@ -8,7 +8,6 @@ import { useAnalysisSettingsStore } from '@/stores/analysis-settings'
 import { useSnapshotsStore } from '@/stores/snapshots'
 import { useCustomSourcesStore } from '@/stores/custom-sources'
 import { CHANNEL_CATALOG } from '@/adapters/registry'
-import { getTradingStatus } from '@/lib/trading-calendar'
 import type { AnalysisSnapshot, EventStage, NewsAnalysis, Recommendation, TrendLabel } from '@/types'
 import { formatDateTime, formatPercent } from '@/lib/format'
 import {
@@ -46,7 +45,6 @@ const maxScore = ref(100)
 const sortBy = ref<'score' | 'change' | 'volume' | 'name'>('score')
 const compareId = ref('')
 
-const trading = computed(() => getTradingStatus())
 const report = computed(() => analysis.report)
 const market = computed(() => analysis.report?.market)
 
@@ -214,12 +212,6 @@ watch(
         <p>按趋势、动量、量能、区间与事件加权排序；点击标的查看详情。</p>
       </div>
       <div class="page-head-actions">
-        <span class="chip">{{ trading.latestTradingDay }} · {{ trading.phaseLabel }}</span>
-        <div class="filter-group">
-          <button class="btn btn-mini" :disabled="!report" @click="report && exportRecommendationsCsv(report)">CSV</button>
-          <button class="btn btn-mini" :disabled="!report" @click="report && exportRecommendationsJson(report)">JSON</button>
-          <button class="btn btn-mini" :disabled="!report" @click="report && exportReportMarkdown(report)">Markdown</button>
-        </div>
         <button class="btn btn-primary" :disabled="analysis.loading" @click="run">
           {{ analysis.loading ? '分析中…' : '重新分析' }}
         </button>
@@ -389,6 +381,18 @@ watch(
             </table>
           </div>
           <p v-else class="muted">暂无更早快照可对比，下一次重新分析后即可看到评分与趋势变化。</p>
+        </div>
+      </details>
+
+      <details class="section-collapse">
+        <summary>导出报告</summary>
+        <div class="collapse-body">
+          <div class="filter-group">
+            <button class="btn btn-mini" @click="report && exportRecommendationsCsv(report)">CSV</button>
+            <button class="btn btn-mini" @click="report && exportRecommendationsJson(report)">JSON</button>
+            <button class="btn btn-mini" @click="report && exportReportMarkdown(report)">Markdown</button>
+          </div>
+          <p class="hint-text">导出当前分析结果，包含候选评分、指标与事件摘要。</p>
         </div>
       </details>
 

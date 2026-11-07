@@ -66,8 +66,6 @@ const previewNames = computed<Record<string, string>>(() =>
   Object.fromEntries(watchlist.items.map((item) => [item.symbol, item.name])),
 )
 
-const favoriteCount = computed(() => watchlist.favorites.length)
-
 onMounted(async () => {
   watchlist.init()
   universe.init()
@@ -138,7 +136,6 @@ async function loadUniverse(): Promise<void> {
         最近交易日 {{ trading.latestTradingDay }} · {{ trading.phaseLabel }}
       </span>
       <span class="tag">自选 {{ watchlist.count }} / {{ MAX_WATCHLIST }}</span>
-      <span class="tag">收藏 {{ favoriteCount }}</span>
       <span class="tag" :class="{ 'tag-live': compare.count >= 2 }">对比 {{ compare.count }} / 6</span>
       <span v-if="universe.status === 'ready'" class="tag tag-live">全市场 {{ universe.providerTotal || universe.count }} 只</span>
       <span v-if="universe.status === 'loading'" class="tag">
@@ -206,7 +203,7 @@ async function loadUniverse(): Promise<void> {
         <button class="btn btn-primary" :disabled="universe.isLoading" @click="loadUniverse">加载全市场列表</button>
       </div>
 
-      <div v-else class="result-list">
+      <div v-else-if="query.trim()" class="result-list">
         <div v-for="stock in results" :key="stock.symbol" class="result-item">
           <div class="result-main">
             <strong>{{ stock.name }}</strong>
@@ -236,6 +233,9 @@ async function loadUniverse(): Promise<void> {
         </div>
         <p v-if="results.length === 0" class="empty-text">没有匹配的股票，试试完整代码或名称中的关键字。</p>
       </div>
+      <p v-else-if="hasUniverse" class="hint-text add-hint">
+        输入代码或名称开始搜索；已加载全市场 {{ universe.count }} 只，当前自选在下方。
+      </p>
     </div>
 
     <div class="card">
