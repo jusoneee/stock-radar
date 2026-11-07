@@ -1617,6 +1617,14 @@ button {
     display: none;
   }
 
+  .score-bar {
+    display: none;
+  }
+
+  .score-cell {
+    justify-content: flex-end;
+  }
+
   .app-footer {
     margin-top: 24px;
     font-size: 11px;
