@@ -57,7 +57,7 @@ interface EastmoneyKlineResponse {
 }
 
 /** Eastmoney secid: 1.<code> for Shanghai, 0.<code> for Shenzhen/Beijing. */
-function toSecId(symbol: string): string {
+export function toSecId(symbol: string): string {
   const prefix = symbol.startsWith('6') || symbol.startsWith('5') ? '1' : '0'
   return `${prefix}.${symbol}`
 }

@@ -30,9 +30,23 @@ export const UNIVERSE_SOURCE = '东方财富行情列表（push2.clist，沪深 
 interface EastmoneyRow {
   f2?: number | string
   f3?: number | string
+  f4?: number | string
+  f5?: number | string
+  f6?: number | string
+  f7?: number | string
+  f8?: number | string
+  f9?: number | string
+  f10?: number | string
   f12?: string
   f13?: number
   f14?: string
+  f15?: number | string
+  f16?: number | string
+  f17?: number | string
+  f18?: number | string
+  f20?: number | string
+  f21?: number | string
+  f23?: number | string
   f100?: string
   f124?: number
 }
@@ -62,7 +76,7 @@ export interface UniverseFetchResult {
 function buildPageUrl(page: number): string {
   return (
     `${LIST_BASE}?pn=${page}&pz=${PAGE_SIZE}&po=1&np=1&fltt=2&invt=2&fid=f12` +
-    `&fs=${FS}&fields=f12,f13,f14,f2,f3,f100,f124`
+    `&fs=${FS}&fields=f12,f13,f14,f2,f3,f4,f5,f6,f7,f8,f9,f10,f15,f16,f17,f18,f20,f21,f23,f100,f124`
   )
 }
 
@@ -98,6 +112,9 @@ function toStock(row: EastmoneyRow): UniverseStock | null {
 
   const price = toNumber(row.f2)
   const pctChange = toNumber(row.f3)
+  const turnoverRate = toNumber(row.f8)
+  const volumeRatio = toNumber(row.f10)
+  const marketCap = toNumber(row.f20)
   const sector = row.f100?.trim() && row.f100.trim() !== '-' ? row.f100.trim() : undefined
 
   return {
@@ -107,6 +124,20 @@ function toStock(row: EastmoneyRow): UniverseStock | null {
     sector,
     price,
     pctChange,
+    changeAmount: toNumber(row.f4),
+    volume: toNumber(row.f5),
+    amount: toNumber(row.f6),
+    turnoverRate,
+    volumeRatio,
+    pe: toNumber(row.f9),
+    pb: toNumber(row.f23),
+    marketCap,
+    floatCap: toNumber(row.f21),
+    amplitude: toNumber(row.f7),
+    high: toNumber(row.f15),
+    low: toNumber(row.f16),
+    open: toNumber(row.f17),
+    prevClose: toNumber(row.f18),
     quoteTime: row.f124 ? new Date(row.f124 * 1000).toISOString() : undefined,
     st: /^\*?ST/.test(name),
     suspended: price === undefined,

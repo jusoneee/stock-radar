@@ -398,5 +398,21 @@ watch(
 
       <p class="disclaimer">{{ DISCLAIMER }}</p>
     </template>
+
+    <details class="section-collapse">
+      <summary>工作方式与评分口径</summary>
+      <div class="collapse-body">
+        <ol class="flow-list">
+          <li><b>1</b><span><strong>选渠道</strong> · 在设置中启用行情源与新闻源，并按可靠度分配权重。</span></li>
+          <li><b>2</b><span><strong>拉数据</strong> · 并行请求各渠道，单渠道失败自动降级，收盘价按权重合并。</span></li>
+          <li><b>3</b><span><strong>算指标</strong> · 均线结构、动量、量比、区间位置，以及新闻事件、情绪与阶段。</span></li>
+          <li><b>4</b><span><strong>出结果</strong> · 趋势与事件加权打分，输出候选列表、时机参考和风险提示。</span></li>
+        </ol>
+        <p class="hint-text">
+          评分只影响候选排序，不改变指标与事件判定；所有结论可在「分析」页逐项展开。行情与资讯来自第三方公开接口，
+          不构成任何投资建议。
+        </p>
+      </div>
+    </details>
   </section>
 </template>

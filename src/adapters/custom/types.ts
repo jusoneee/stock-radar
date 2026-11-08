@@ -1,9 +1,10 @@
 /**
  * User-defined data source model.
  *
- * Configurations are persisted in localStorage, but token values are kept in
- * memory only. Requests never forward arbitrary user headers through the
- * bundled proxy: the proxy accepts an allow-listed target URL only.
+ * Configurations (including the token and extra headers entered by the user)
+ * are persisted in localStorage on this device only; never bundled or committed.
+ * The bundled proxy still accepts an allow-listed target URL only and does not
+ * forward custom headers, so headers apply to direct (CORS-capable) requests.
  */
 
 export type CustomSourceKind = 'quote' | 'news'
@@ -41,6 +42,8 @@ export interface CustomSourceConfig {
   fieldMap: CustomFieldMap
   /** Route the request through the local `/api/custom` allow-list proxy. */
   viaProxy: boolean
+  /** Extra request headers (e.g. Authorization / X-Api-Key); only sent when direct. */
+  headers?: Record<string, string>
   enabled: boolean
   /** Relative weight inside its own kind, 0.05 - 1. */
   weight: number

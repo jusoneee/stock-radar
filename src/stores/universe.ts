@@ -5,7 +5,7 @@ import { nextTradingSessionStart } from '@/lib/trading-calendar'
 import { readJson, writeJson } from '@/lib/storage'
 
 const STORAGE_KEY = 'stock-radar:universe:v1'
-const CACHE_VERSION = 1
+const CACHE_VERSION = 2
 
 type UniverseStatus = 'idle' | 'loading' | 'ready' | 'error'
 

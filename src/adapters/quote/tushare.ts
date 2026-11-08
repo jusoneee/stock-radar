@@ -28,7 +28,7 @@ const META: ChannelMeta = {
   provider: 'Tushare Pro',
   description: '需自备 Token 的量化数据源，历史日线质量高；未配置 Token 时该渠道明确显示未启用。',
   requiresKey: true,
-  keyHint: 'Tushare Pro Token（仅存于浏览器内存，不落盘）',
+  keyHint: 'Tushare Pro Token（仅保存在本机浏览器，勿填生产密钥）',
   docsUrl: 'https://tushare.pro/',
   reliability: 0.95,
   latencyMs: 700,

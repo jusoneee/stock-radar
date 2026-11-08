@@ -31,6 +31,8 @@ const form = reactive({
 })
 
 const token = ref('')
+const headersText = ref('')
+const savedHeaderText = reactive<Record<string, string>>({})
 const testSymbol = ref('600519')
 const testing = ref(false)
 const testResult = ref<ConnectionTestResult | null>(null)
@@ -56,6 +58,36 @@ watch(
   },
 )
 
+/** One `Key: Value` per line; blanks and # comments are ignored. */
+function parseHeaderLines(text: string): Record<string, string> | undefined {
+  const result: Record<string, string> = {}
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const index = trimmed.indexOf(':')
+    if (index <= 0) continue
+    const key = trimmed.slice(0, index).trim()
+    const value = trimmed.slice(index + 1).trim()
+    if (!key || !value) continue
+    result[key] = value
+    if (Object.keys(result).length >= 20) break
+  }
+  return Object.keys(result).length > 0 ? result : undefined
+}
+
+function headerLines(headers?: Record<string, string>): string {
+  if (!headers) return ''
+  return Object.entries(headers)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join('\n')
+}
+
+function onSavedHeaders(item: CustomSourceConfig, event: Event): void {
+  const text = (event.target as HTMLTextAreaElement).value
+  savedHeaderText[item.id] = text
+  store.update(item.id, { headers: parseHeaderLines(text) ?? {} })
+}
+
 function draftConfig(): CustomSourceConfig {
   return {
     id: 'custom-draft',
@@ -67,6 +99,7 @@ function draftConfig(): CustomSourceConfig {
     timeoutMs: Number(form.timeoutMs),
     fieldMap: { ...form.fieldMap },
     viaProxy: form.viaProxy,
+    headers: parseHeaderLines(headersText.value),
     enabled: true,
     weight: 0.6,
     createdAt: '1970-01-01T00:00:00.000Z',
@@ -81,6 +114,7 @@ function fingerprint(config: CustomSourceConfig): string {
     body: config.bodyTemplate ?? '',
     timeout: config.timeoutMs,
     proxy: config.viaProxy,
+    headers: config.headers ?? {},
     map: config.fieldMap,
   })
 }
@@ -112,6 +146,7 @@ function saveDraft(): void {
     timeoutMs: Number(form.timeoutMs),
     fieldMap: { ...form.fieldMap },
     viaProxy: form.viaProxy,
+    headers: parseHeaderLines(headersText.value),
   })
   if (!created) return
   if (token.value.trim()) store.setToken(created.id, token.value)
@@ -127,6 +162,7 @@ function resetDraft(): void {
   form.viaProxy = false
   form.fieldMap = mapFor(form.kind)
   token.value = ''
+  headersText.value = ''
   testResult.value = null
   testedFingerprint.value = ''
 }
@@ -139,6 +175,8 @@ async function testSaved(item: CustomSourceConfig): Promise<void> {
 }
 
 function remove(item: CustomSourceConfig): void {
+  const confirmed = window.confirm(`确定删除自定义数据源「${item.name}」？此操作不可撤销。`)
+  if (!confirmed) return
   delete itemResults[item.id]
   store.remove(item.id)
 }
@@ -155,10 +193,20 @@ function errorTone(result: ConnectionTestResult): string {
       <span class="tag">保存前必须测试连接</span>
     </header>
     <p class="hint-text">
-      自定义源配置只保存在本浏览器 localStorage，不会写入仓库文件；Token 仅存在当前页面内存，刷新后需重新输入。
+      自定义源配置、Token 与请求头只保存在本机浏览器 localStorage，不会写入仓库文件或构建产物；
+      静态站点无法保证密钥安全，请勿填入生产密钥。
       勾选「经本地代理」时请求会发往 <code>/api/custom</code>，由服务端按 <code>CUSTOM_SOURCE_ALLOWLIST</code>
       校验域名与路径前缀，代理不会透传任何自定义 Header（Authorization 仅支持直连）。
     </p>
+    <details class="source-guide">
+      <summary>如何填写自定义源</summary>
+      <ul>
+        <li>获取方式：本项目不提供默认接口地址；请向你的数据服务商索取 http(s) 接口、鉴权方式与返回字段路径，或使用自己部署的服务。</li>
+        <li>填写格式：URL 中用 <code>{symbol}</code> 占位股票代码；Token 直连时作为 <code>Authorization: Bearer</code> 发送；自定义请求头每行 <code>Key: Value</code>，最多 20 项、值不超过 200 字符。</li>
+        <li>生效范围：Token 与请求头只作用于该自定义源；请求头仅在直连时发送，走代理时不会透传。</li>
+        <li>失败提示：测试连接会返回 HTTP 状态、耗时与失败原因；未开启 CORS 的接口会在浏览器端明确失败，不会伪造数据。</li>
+      </ul>
+    </details>
     <p v-if="staticMode" class="inline-warn">
       纯静态部署能力边界：当前构建不含 <code>/api/custom</code> 代理，自定义数据源<strong>只支持浏览器可直接访问（CORS 可达）的
       http(s) 地址</strong>；「经本地代理」选项已禁用。未开启 CORS 的接口会在测试连接时明确失败并给出原因，不会伪造数据。
@@ -190,11 +238,11 @@ function errorTone(result: ConnectionTestResult): string {
               />
             </label>
             <label class="mini-field token-field">
-              <span>Token（仅内存）</span>
+              <span>Token（本机保存）</span>
               <input
                 type="password"
                 autocomplete="off"
-                placeholder="可选"
+                placeholder="可选，勿填生产密钥"
                 :value="store.tokens[item.id] ?? ''"
                 @input="store.setToken(item.id, ($event.target as HTMLInputElement).value)"
               />
@@ -206,6 +254,17 @@ function errorTone(result: ConnectionTestResult): string {
             <button class="btn btn-mini" :disabled="testing" @click="testSaved(item)">测试</button>
             <button class="btn btn-mini" @click="remove(item)">删除</button>
           </div>
+
+          <details class="row-advanced">
+            <summary>请求头（每行 Key: Value，仅直连生效）</summary>
+            <textarea
+              rows="2"
+              spellcheck="false"
+              placeholder="X-API-Key: xxx"
+              :value="savedHeaderText[item.id] ?? headerLines(item.headers)"
+              @change="onSavedHeaders(item, $event)"
+            />
+          </details>
 
           <p v-if="itemResults[item.id]" class="test-result" :class="errorTone(itemResults[item.id]!)">
             HTTP {{ itemResults[item.id]!.status || '—' }} · {{ itemResults[item.id]!.elapsedMs }}ms ·
@@ -251,8 +310,17 @@ function errorTone(result: ConnectionTestResult): string {
             <input v-model.trim="testSymbol" type="text" placeholder="600519" />
           </label>
           <label class="policy-field">
-            <span>Token（仅内存，可留空）</span>
+            <span>Token（本机保存，可留空）</span>
             <input v-model="token" type="password" autocomplete="off" placeholder="直连时作为 Bearer" />
+          </label>
+          <label class="policy-field wide">
+            <span>自定义请求头（每行 Key: Value，仅直连生效）</span>
+            <textarea
+              v-model="headersText"
+              rows="2"
+              spellcheck="false"
+              placeholder="X-API-Key: xxx"
+            />
           </label>
           <label class="policy-field check-field">
             <span>经本地代理（CORS 受限时）{{ staticMode ? '· 纯静态不可用' : '' }}</span>
@@ -378,6 +446,70 @@ function errorTone(result: ConnectionTestResult): string {
   display: block;
   margin-top: 4px;
   color: var(--muted);
+}
+
+.source-guide {
+  margin: 10px 0;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 10px 8px;
+  font-size: 11.5px;
+  color: var(--text-soft);
+  background: var(--surface-2);
+}
+
+.source-guide summary {
+  padding: 6px 0;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.source-guide ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  line-height: 1.55;
+}
+
+.source-guide code {
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  font-size: 10.5px;
+}
+
+.row-advanced {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--text-soft);
+}
+
+.row-advanced summary {
+  padding: 4px 0;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.policy-field textarea,
+.row-advanced textarea {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.policy-field textarea:focus,
+.row-advanced textarea:focus {
+  outline: none;
+  border-color: var(--accent-border);
 }
 
 .source-form-wrap {

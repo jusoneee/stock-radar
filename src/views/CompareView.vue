@@ -9,6 +9,7 @@ import { useWatchlistStore } from '@/stores/watchlist'
 import LineChart from '@/components/LineChart.vue'
 import type { LineSeries } from '@/components/line-chart.types'
 import { formatAmount, formatPercent, formatPrice } from '@/lib/format'
+import BackButton from '@/components/BackButton.vue'
 
 const compare = useCompareStore()
 const watchlist = useWatchlistStore()
@@ -199,9 +200,12 @@ watch(symbols, load, { deep: true })
 <template>
   <section class="page">
     <header class="page-head">
-      <div>
-        <h1>对比</h1>
-        <p>2~6 只股票按共同交易日对齐，首日归一化为 100，对比区间涨跌与量能。</p>
+      <div class="page-head-lead">
+        <BackButton />
+        <div>
+          <h1>对比</h1>
+          <p>2~6 只股票按共同交易日对齐，首日归一化为 100，对比区间涨跌与量能。</p>
+        </div>
       </div>
       <div class="page-head-actions">
         <button class="btn btn-ghost" :disabled="compare.count === 0" @click="compare.clear()">清空</button>

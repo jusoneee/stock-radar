@@ -16,6 +16,8 @@ interface PersistedConfig {
   timeoutMs?: number
   retryCount?: number
   cacheTtlMs?: number
+  /** Local-only credentials; see the warning shown in Settings. */
+  keys?: Record<string, string>
 }
 
 function defaultChannels(): ChannelState[] {
@@ -57,7 +59,7 @@ function normalize(items: Array<{ id: string; weight: number }>): Array<{ id: st
 export const useChannelsStore = defineStore('channels', {
   state: () => ({
     channels: [] as ChannelState[],
-    /** Keys live in memory only: never persisted, never committed. */
+    /** Local-only credentials: persisted in this browser, never in the repo/build. */
     keys: {} as Record<string, string>,
     timeoutMs: 8_000,
     /** Extra attempts after a network failure. */
@@ -153,6 +155,15 @@ export const useChannelsStore = defineStore('channels', {
         if (Number.isFinite(parsed.cacheTtlMs)) {
           this.cacheTtlMs = Math.min(600_000, Math.max(0, Number(parsed.cacheTtlMs)))
         }
+        if (parsed.keys && typeof parsed.keys === 'object') {
+          const keys: Record<string, string> = {}
+          for (const [id, value] of Object.entries(parsed.keys)) {
+            if (!metaOf(id) || typeof value !== 'string') continue
+            const trimmed = value.trim().slice(0, 200)
+            if (trimmed) keys[id] = trimmed
+          }
+          this.keys = keys
+        }
       } catch {
         // Corrupted local storage should never block the app; fall back to defaults.
         localStorage.removeItem(STORAGE_KEY)
@@ -164,6 +175,7 @@ export const useChannelsStore = defineStore('channels', {
         timeoutMs: this.timeoutMs,
         retryCount: this.retryCount,
         cacheTtlMs: this.cacheTtlMs,
+        keys: { ...this.keys },
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
     },
@@ -196,6 +208,7 @@ export const useChannelsStore = defineStore('channels', {
     },
     setKey(id: string, value: string): void {
       this.keys[id] = value.trim()
+      this.persist()
     },
     enableAll(kind: 'quote' | 'news', enabled: boolean): void {
       for (const channel of this.channels) {

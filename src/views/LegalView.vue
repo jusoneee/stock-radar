@@ -7,6 +7,7 @@ import {
   COMPLIANCE_VERSION,
   DATA_SOURCE_NOTES,
 } from '@/lib/compliance'
+import BackButton from '@/components/BackButton.vue'
 
 type LegalDoc = 'terms' | 'privacy' | 'sources'
 
@@ -28,16 +29,19 @@ const title = computed(() => titles[doc.value])
 <template>
   <section class="page">
     <header class="page-head">
-      <div>
-        <h1>{{ title }}</h1>
-        <p>合规文案版本 v{{ COMPLIANCE_VERSION }} · 更新于 {{ COMPLIANCE_UPDATED_AT }}</p>
+      <div class="page-head-lead">
+        <BackButton />
+        <div>
+          <h1>{{ title }}</h1>
+          <p>合规文案版本 v{{ COMPLIANCE_VERSION }} · 更新于 {{ COMPLIANCE_UPDATED_AT }}</p>
+        </div>
       </div>
     </header>
 
     <div v-if="doc === 'terms'" class="card legal-card">
       <h2>服务性质</h2>
       <p>
-        Stock Radar 是一个本地运行的 A 股行情与公开资讯分析工具，所有指标、趋势判定、事件阶段与操作参考均由公开数据经规则化计算得出，
+        炒股战士·老猪 是一个本地运行的 A 股行情与公开资讯分析工具，所有指标、趋势判定、事件阶段与操作参考均由公开数据经规则化计算得出，
         仅用于学习、研究与技术演示。
       </p>
       <p><strong>本项目不构成任何投资建议、投资咨询、要约或承诺，也不对任何交易结果承担责任。</strong></p>

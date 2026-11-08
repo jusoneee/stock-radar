@@ -51,8 +51,13 @@ async function requestJson(
   const startedAt = performance.now()
 
   const headers: Record<string, string> = { Accept: 'application/json' }
-  // Keys stay in memory and are only attached for direct browser calls:
+  // Credentials and custom headers only apply to direct browser calls:
   // the proxy intentionally refuses authorization headers.
+  if (!config.viaProxy && config.headers) {
+    for (const [name, value] of Object.entries(config.headers)) {
+      if (name && value) headers[name] = value
+    }
+  }
   if (token && !config.viaProxy) headers.Authorization = `Bearer ${token}`
   const init: RequestInit = { method: config.method, headers, signal: controller.signal }
   if (config.method === 'POST') {

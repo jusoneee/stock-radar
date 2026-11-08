@@ -11,7 +11,7 @@ export interface ChannelMeta {
   kind: ChannelKind
   provider: string
   description: string
-  /** Real integration requires a user-provided key. Keys are never persisted or committed. */
+  /** Real integration requires a user-provided key. Keys stay in this browser only. */
   requiresKey: boolean
   keyHint?: string
   docsUrl?: string
@@ -52,6 +52,20 @@ export interface QuoteSnapshot {
   sourceId: string
   /** Timestamp of the mock data generation. */
   asOf: string
+}
+
+/** Chart periods offered on the stock detail page. */
+export type ChartPeriod = 'intraday' | 'fiveDay' | 'day' | 'week' | 'month'
+
+/** Generic chart bar: kline rows and intraday minute rows share the same shape. */
+export interface ChartBar {
+  /** Axis label: date for daily/weekly/monthly, time for intraday. */
+  label: string
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
 }
 
 export interface RawNewsItem {
@@ -183,6 +197,31 @@ export interface UniverseStock {
   price?: number
   /** Latest daily change in percent, if present. */
   pctChange?: number
+  /** Latest daily change amount in CNY. */
+  changeAmount?: number
+  /** Traded volume in lots (手). */
+  volume?: number
+  /** Traded amount in CNY yuan. */
+  amount?: number
+  /** Turnover rate in percent (f8), only present on freshly synced lists. */
+  turnoverRate?: number
+  /** Volume ratio (f10), only present on freshly synced lists. */
+  volumeRatio?: number
+  /** Dynamic P/E ratio. */
+  pe?: number
+  /** Price-to-book ratio. */
+  pb?: number
+  /** Total market cap in CNY yuan (f20), only present on freshly synced lists. */
+  marketCap?: number
+  /** Free-float market cap in CNY yuan. */
+  floatCap?: number
+  /** Daily amplitude in percent. */
+  amplitude?: number
+  /** Daily high / low / open / previous close. */
+  high?: number
+  low?: number
+  open?: number
+  prevClose?: number
   /** Provider quote timestamp (ISO string), used for freshness hints. */
   quoteTime?: string
   /** Name carries an ST / *ST prefix. */
@@ -205,7 +244,11 @@ export interface WatchItem {
   symbol: string
   name: string
   market?: MarketPrefix
-  /** Free-form user group, empty means the default group. */
+  /** Group ids this stock belongs to; empty means ungrouped. */
+  groupIds?: string[]
+  /** Legacy group names kept only for migrating old persisted data. */
+  groups?: string[]
+  /** Legacy single-group field kept only for migrating old persisted data. */
   group?: string
   /**
    * Favourite flag. Items saved before this field existed are migrated to

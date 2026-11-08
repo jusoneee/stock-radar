@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, reactive } from 'vue'
 import { useChannelsStore } from '@/stores/channels'
 import { useAnalysisSettingsStore } from '@/stores/analysis-settings'
 import ChannelCard from '@/components/ChannelCard.vue'
 import CustomSourcesPanel from '@/components/CustomSourcesPanel.vue'
+import BackButton from '@/components/BackButton.vue'
 import { PROXY_AVAILABLE, channelAvailability } from '@/adapters/availability'
+import { testChannel, type ChannelTestResult } from '@/lib/channel-test'
+import { THEMES, useThemeStore } from '@/stores/theme'
 import type { ChannelMeta, ScoreWeights } from '@/types'
 
 const store = useChannelsStore()
 const analysisSettings = useAnalysisSettingsStore()
+const theme = useThemeStore()
 analysisSettings.init()
 
 const weightFields: Array<{ key: keyof ScoreWeights; label: string; hint: string }> = [
@@ -67,19 +71,54 @@ function onRetry(event: Event): void {
 function onCacheTtl(event: Event): void {
   store.setCacheTtlMs(Number((event.target as HTMLInputElement).value))
 }
+
+/** Leaving system mode pins the palette that is currently visible. */
+function toggleSystem(): void {
+  theme.setMode(theme.isSystem ? theme.resolved : 'system')
+}
+
+/* ---------- per-channel connection test ---------- */
+const channelTesting = reactive<Record<string, boolean>>({})
+const channelResults = reactive<Record<string, ChannelTestResult | null>>({})
+
+async function runChannelTest(card: ChannelView): Promise<void> {
+  if (channelTesting[card.meta.id]) return
+  channelTesting[card.meta.id] = true
+  channelResults[card.meta.id] = null
+  try {
+    channelResults[card.meta.id] = await testChannel(
+      card.meta.id,
+      card.apiKey,
+      Math.max(4_000, store.timeoutMs),
+    )
+  } finally {
+    channelTesting[card.meta.id] = false
+  }
+}
 </script>
 
 <template>
   <section class="page">
     <header class="page-head">
-      <div>
-        <h1>设置</h1>
-        <p>配置数据来源、评分权重与请求策略，全部保存在浏览器本地；密钥只在当前会话内存中。</p>
+      <div class="page-head-lead">
+        <BackButton />
+        <div>
+          <h1>设置</h1>
+          <p>配置数据来源、凭证、评分权重与请求策略，配置保存在本机浏览器；凭证不会写入构建产物或仓库。</p>
+        </div>
       </div>
       <div class="page-head-actions">
         <button class="btn btn-ghost" @click="store.reset()">恢复默认配置</button>
       </div>
     </header>
+
+    <div class="notice">
+      <strong>凭证仅保存在本机浏览器</strong>
+      <p>
+        Token / API Key / 自定义请求头写入当前浏览器的 localStorage，刷新后仍保留；纯静态站点无法保证密钥安全，
+        <strong>请勿填入生产密钥</strong>，也不要把密钥写进仓库或构建配置。禁用数据源后，相关取数逻辑会直接跳过。
+      </p>
+    </div>
 
     <div v-if="staticMode && unavailableCount > 0" class="notice">
       <strong>纯静态部署说明</strong>
@@ -87,6 +126,54 @@ function onCacheTtl(event: Event): void {
         当前构建不含 <code>/api</code> 同源代理，{{ unavailableCount }} 个依赖代理的渠道已标记为「纯静态不可用」并自动跳过；
         这些渠道不会发起请求，也不会返回模拟数据。
       </p>
+    </div>
+
+    <div class="card">
+      <header class="card-head">
+        <h2>外观主题</h2>
+        <div class="card-head-actions">
+          <span class="tag">{{ theme.isSystem ? `跟随系统 · ${theme.resolvedLabel}` : theme.currentLabel }}</span>
+        </div>
+      </header>
+      <div class="theme-layout">
+        <div class="theme-system">
+          <button
+            class="switch"
+            :class="{ 'is-on': theme.isSystem }"
+            type="button"
+            :aria-pressed="theme.isSystem"
+            aria-label="跟随系统深浅色"
+            @click="toggleSystem"
+          >
+            <span />
+          </button>
+          <div class="theme-system-text">
+            <strong>跟随系统</strong>
+            <small>随系统深浅色实时切换，当前为{{ theme.resolvedLabel }}</small>
+          </div>
+        </div>
+        <div class="theme-grid">
+          <button
+            v-for="option in THEMES"
+            :key="option.id"
+            class="theme-option"
+            :class="{ 'is-active': theme.mode === option.id }"
+            type="button"
+            :aria-pressed="theme.mode === option.id"
+            @click="theme.setMode(option.id)"
+          >
+            <span class="theme-swatches" aria-hidden="true">
+              <i v-for="color in option.swatches" :key="color" :style="{ background: color }" />
+            </span>
+            <span class="theme-text">
+              <strong>{{ option.label }}</strong>
+              <small>{{ option.hint }}</small>
+            </span>
+            <span v-if="theme.mode === option.id" class="theme-check" aria-hidden="true">✓</span>
+          </button>
+        </div>
+      </div>
+      <p class="hint-text">主题选择保存在本机浏览器，刷新后保持；跟随系统模式会同时响应系统与应用内的切换。</p>
     </div>
 
     <div class="card">
@@ -133,9 +220,12 @@ function onCacheTtl(event: Event): void {
           :api-key="card.apiKey"
           :available="card.available"
           :unavailable-reason="card.unavailableReason"
+          :testing="channelTesting[card.meta.id] ?? false"
+          :test-result="channelResults[card.meta.id] ?? null"
           @update:enabled="store.toggle(card.meta.id)"
           @update:weight="(value) => store.setWeight(card.meta.id, value)"
           @update:apiKey="(value) => store.setKey(card.meta.id, value)"
+          @test="runChannelTest(card)"
         />
       </div>
       <p v-if="quoteEnabled === 0" class="inline-warn">未启用任何可用行情源，分析将无法运行。</p>
@@ -161,9 +251,12 @@ function onCacheTtl(event: Event): void {
           :api-key="card.apiKey"
           :available="card.available"
           :unavailable-reason="card.unavailableReason"
+          :testing="channelTesting[card.meta.id] ?? false"
+          :test-result="channelResults[card.meta.id] ?? null"
           @update:enabled="store.toggle(card.meta.id)"
           @update:weight="(value) => store.setWeight(card.meta.id, value)"
           @update:apiKey="(value) => store.setKey(card.meta.id, value)"
+          @test="runChannelTest(card)"
         />
       </div>
       <p v-if="newsEnabled === 0" class="inline-warn">
@@ -197,7 +290,7 @@ function onCacheTtl(event: Event): void {
         </div>
         <p class="hint-text">
           缓存命中时不发起网络请求，避免连续「重新分析」触发上游限流；设为 0 表示每次实时请求。
-          页面输入的密钥不会写入 localStorage，也不会进入 git 仓库。
+          页面上填写的凭证只保存在本机 localStorage，不会进入 git 仓库或构建产物。
         </p>
       </div>
     </details>

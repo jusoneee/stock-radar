@@ -1,6 +1,6 @@
 {
-  "name": "Stock Radar · A股行情与新闻双引擎",
-  "short_name": "Stock Radar",
+  "name": "炒股战士·老猪 · A股行情与新闻双引擎",
+  "short_name": "炒股战士·老猪",
   "description": "A股行情、趋势统计与新闻事件的本地分析工作台",
   "start_url": "./",
   "scope": "./",

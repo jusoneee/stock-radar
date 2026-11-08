@@ -60,10 +60,26 @@ function sanitize(raw: unknown): CustomSourceConfig | null {
     timeoutMs: clampTimeout(Number(value.timeoutMs)),
     fieldMap: sanitizeMap(value.fieldMap, value.kind),
     viaProxy: Boolean(value.viaProxy),
+    headers: sanitizeHeaders(value.headers),
     enabled: value.enabled !== false,
     weight: clampWeight(Number(value.weight)),
     createdAt: typeof value.createdAt === 'string' ? value.createdAt : new Date().toISOString(),
   }
+}
+
+/** Only plain, short header pairs are kept; blanks are dropped. */
+export function sanitizeHeaders(raw: unknown): Record<string, string> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const result: Record<string, string> = {}
+  for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value !== 'string') continue
+    const key = name.trim().slice(0, 60)
+    const text = value.trim().slice(0, 200)
+    if (!key || !text) continue
+    result[key] = text
+    if (Object.keys(result).length >= 20) break
+  }
+  return Object.keys(result).length > 0 ? result : undefined
 }
 
 function sanitizeMap(raw: unknown, kind: CustomSourceKind): CustomFieldMap {
@@ -81,7 +97,7 @@ function sanitizeMap(raw: unknown, kind: CustomSourceKind): CustomFieldMap {
 export const useCustomSourcesStore = defineStore('customSources', {
   state: () => ({
     sources: [] as CustomSourceConfig[],
-    /** Tokens are memory-only: never persisted, never committed. */
+    /** Local-only credentials: persisted in this browser, never committed. */
     tokens: {} as Record<string, string>,
     initialized: false,
   }),
@@ -110,19 +126,28 @@ export const useCustomSourcesStore = defineStore('customSources', {
       try {
         const raw = localStorage.getItem(STORAGE_KEY)
         if (!raw) return
-        const parsed = JSON.parse(raw) as { sources?: unknown }
+        const parsed = JSON.parse(raw) as { sources?: unknown; tokens?: unknown }
         if (!Array.isArray(parsed.sources)) return
         this.sources = parsed.sources
           .map((item) => sanitize(item))
           .filter((item): item is CustomSourceConfig => item !== null)
+        if (parsed.tokens && typeof parsed.tokens === 'object') {
+          const tokens: Record<string, string> = {}
+          for (const [id, value] of Object.entries(parsed.tokens)) {
+            if (!this.sources.some((item) => item.id === id) || typeof value !== 'string') continue
+            const trimmed = value.trim().slice(0, 300)
+            if (trimmed) tokens[id] = trimmed
+          }
+          this.tokens = tokens
+        }
       } catch {
         localStorage.removeItem(STORAGE_KEY)
       }
     },
     persist(): void {
-      // Persisted payload keeps connection settings only; tokens stay in memory.
+      // Local-only payload: connection settings, headers and tokens never leave this browser.
       const payload = {
-        sources: this.sources.map(({ id, name, kind, urlTemplate, method, bodyTemplate, timeoutMs, fieldMap, viaProxy, enabled, weight, createdAt }) => ({
+        sources: this.sources.map(({ id, name, kind, urlTemplate, method, bodyTemplate, timeoutMs, fieldMap, viaProxy, headers, enabled, weight, createdAt }) => ({
           id,
           name,
           kind,
@@ -132,10 +157,12 @@ export const useCustomSourcesStore = defineStore('customSources', {
           timeoutMs,
           fieldMap,
           viaProxy,
+          headers,
           enabled,
           weight,
           createdAt,
         })),
+        tokens: { ...this.tokens },
       }
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
@@ -152,6 +179,7 @@ export const useCustomSourcesStore = defineStore('customSources', {
       timeoutMs: number
       fieldMap: CustomFieldMap
       viaProxy: boolean
+      headers?: Record<string, string>
       enabled?: boolean
     }): CustomSourceConfig | null {
       const urlTemplate = validateUrlTemplate(input.urlTemplate)
@@ -166,6 +194,7 @@ export const useCustomSourcesStore = defineStore('customSources', {
         timeoutMs: clampTimeout(input.timeoutMs),
         fieldMap: sanitizeMap(input.fieldMap, input.kind),
         viaProxy: input.viaProxy,
+        headers: sanitizeHeaders(input.headers),
         enabled: input.enabled ?? true,
         weight: 0.6,
         createdAt: new Date().toISOString(),
@@ -187,6 +216,7 @@ export const useCustomSourcesStore = defineStore('customSources', {
       if (patch.timeoutMs !== undefined) target.timeoutMs = clampTimeout(patch.timeoutMs)
       if (patch.fieldMap) target.fieldMap = sanitizeMap(patch.fieldMap, target.kind)
       if (patch.viaProxy !== undefined) target.viaProxy = Boolean(patch.viaProxy)
+      if (patch.headers !== undefined) target.headers = sanitizeHeaders(patch.headers)
       if (patch.weight !== undefined) target.weight = clampWeight(patch.weight)
       this.persist()
     },
@@ -209,9 +239,11 @@ export const useCustomSourcesStore = defineStore('customSources', {
     },
     setToken(id: string, token: string): void {
       this.tokens[id] = token.trim()
+      this.persist()
     },
     clearTokens(): void {
       this.tokens = {}
+      this.persist()
     },
   },
 })

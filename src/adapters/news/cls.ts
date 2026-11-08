@@ -8,7 +8,7 @@ const META: ChannelMeta = {
   provider: '财联社',
   description: '分钟级快讯，时效性强；开放平台需签约账号，未配置时该渠道明确显示未启用，不返回模拟数据。',
   requiresKey: true,
-  keyHint: '财联社开放平台 Key（仅存于浏览器内存）',
+  keyHint: '财联社开放平台 Key（仅保存在本机浏览器）',
   docsUrl: 'https://www.cls.cn/',
   reliability: 0.9,
   latencyMs: 260,

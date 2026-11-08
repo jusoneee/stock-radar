@@ -6,7 +6,9 @@ import { useChannelsStore } from './stores/channels'
 import { useWatchlistStore } from './stores/watchlist'
 import { useUniverseStore } from './stores/universe'
 import { useSnapshotsStore } from './stores/snapshots'
+import { useCompareStore } from './stores/compare'
 import { useStorageStore } from './stores/storage'
+import { useThemeStore } from './stores/theme'
 import { flushStorage, initAppStorage, isStorageReady, useLocalStorageFallback } from './lib/storage'
 import './styles/main.css'
 
@@ -16,9 +18,11 @@ app.use(router)
 
 // Small configuration values still come from localStorage and can be read
 // synchronously. Large datasets are hydrated right after the first paint.
+useThemeStore().init()
 useChannelsStore().init()
 useStorageStore().init()
 useWatchlistStore().init()
+useCompareStore().init()
 useUniverseStore().init()
 useSnapshotsStore().init()
 

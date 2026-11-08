@@ -3,12 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0b0d10" />
+    <meta name="theme-color" content="#0a0c10" />
+    <script>
+      // Apply the persisted theme before first paint to avoid a light/dark flash.
+      (function () {
+        try {
+          var raw = localStorage.getItem('stock-radar:theme:v1');
+          var mode = raw ? JSON.parse(raw).mode : 'system';
+          var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var theme = mode === 'system' ? (dark ? 'dark' : 'light') : mode;
+          if (['dark', 'light', 'midnight', 'sand'].indexOf(theme) === -1) theme = 'dark';
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme =
+            theme === 'light' || theme === 'sand' ? 'light' : 'dark';
+        } catch (e) {}
+      })();
+    </script>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <meta name="description" content="Stock Radar - A股行情与新闻事件驱动的选股分析工具（产品框架版）" />
-    <title>Stock Radar · A股行情与新闻事件雷达</title>
+    <meta name="description" content="炒股战士·老猪 - A股行情与新闻事件驱动的选股分析工具（产品框架版）" />
+    <title>炒股战士·老猪 · A股行情与新闻事件雷达</title>
   </head>
   <body>
     <div id="app"></div>
